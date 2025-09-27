@@ -104,15 +104,14 @@ export function UserProfile({ account }: UserProfileProps) {
                                         >
                                             <Copy className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            asChild
+                                        <a 
+                                            href={explorerLink} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-3"
                                         >
-                                            <a href={explorerLink} target="_blank" rel="noopener noreferrer">
-                                                <ExternalLink className="h-4 w-4" />
-                                            </a>
-                                        </Button>
+                                            <ExternalLink className="h-4 w-4" />
+                                        </a>
                                     </div>
                                     {copiedField === 'address' && (
                                         <p className="text-sm text-green-600">✓ Address copied to clipboard</p>
