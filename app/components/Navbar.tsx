@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ConnectButton } from "@mysten/dapp-kit";
+import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -12,6 +12,7 @@ import {
   NavigationMenuTrigger,
   navigationMenuTriggerStyle,
 } from "./ui/navigation-menu";
+import { Button } from "./ui/button";
 
 const components: { title: string; href: string; description: string }[] = [
   {
@@ -32,6 +33,8 @@ const components: { title: string; href: string; description: string }[] = [
 ];
 
 export default function Navbar() {
+  const currentAccount = useCurrentAccount();
+
   return (
     <NavigationMenu className="max-w-full justify-between p-4 bg-white border-b border-gray-200">
       <NavigationMenuList className="flex w-full justify-between items-center">
@@ -83,9 +86,9 @@ export default function Navbar() {
           </NavigationMenuItem>
         </div>
 
-        <NavigationMenuItem className="flex ml-auto">
+        <div className="flex items-center space-x-4 ml-auto">
           <ConnectButton />
-        </NavigationMenuItem>
+        </div>
       </NavigationMenuList>
     </NavigationMenu>
   );

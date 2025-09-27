@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 import config from "../config.json"; 
 
-const NETWORK: NetworkName = "testnet";
+const NETWORK: NetworkName = "devnet";
 const MAX_EPOCH = 30; // keep ephemeral keys active for this many Sui epochs from now (1 epoch ~= 24h, so ~30 days)
 
 const suiClient = new SuiClient({
@@ -139,6 +139,12 @@ export default function ZkLoginComponent()
         window.history.replaceState(null, "", window.location.pathname);
 
         const jwtPayload = jwtDecode(jwt);
+        console.log("[completeZkLogin] JWT payload:", jwtPayload);
+        console.log("[completeZkLogin] JWT field lengths:");
+        console.log("- sub length:", jwtPayload.sub?.length);
+        console.log("- aud length:", typeof jwtPayload.aud === "string" ? jwtPayload.aud.length : jwtPayload.aud?.[0]?.length);
+        console.log("- iss length:", jwtPayload.iss?.length);
+        
         if (!jwtPayload.sub || !jwtPayload.aud) {
             console.warn("[completeZkLogin] missing jwt.sub or jwt.aud");
             return;
@@ -157,30 +163,57 @@ export default function ZkLoginComponent()
                 body: JSON.stringify({ jwt }),
             };
 
-        const saltResponse: { salt: string } | null =
-            await fetch(config.URL_SALT_SERVICE, requestOptions)
-            .then(res => {
-                console.debug("[completeZkLogin] salt service success");
-                return res.json();
-            })
-            .catch((error: unknown) => {
-                console.warn("[completeZkLogin] salt service error:", error);
-                return null;
-            });
-
-        if (!saltResponse) {
-            return;
-        }
-
-        const userSalt = BigInt(saltResponse.salt);
-
-        const userAddr = jwtToAddress(jwt, userSalt);
-
         const setupData = loadSetupData();
         if (!setupData) {
             console.warn("[completeZkLogin] missing session storage data");
             return;
         }
+
+        let userSalt: bigint;
+        
+        if (config.URL_SALT_SERVICE === "/dummy-salt-service.json") {
+            // For demo purposes, generate a deterministic salt from the user's sub claim
+            // In production, this should come from a proper salt service that stores unique salts per user
+            console.log("[completeZkLogin] Using deterministic salt generation for demo");
+            const subStr = String(jwtPayload.sub);
+            let hash = 0;
+            for (let i = 0; i < subStr.length; i++) {
+                const char = subStr.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            // Convert to positive number and add some randomness based on provider
+            const providerHash = setupData.provider === 'twitch' ? 1000000 : 2000000;
+            userSalt = BigInt(Math.abs(hash) + providerHash);
+            console.log("[completeZkLogin] Generated deterministic salt:", userSalt.toString());
+        } else {
+            // Use real salt service
+            const saltResponse: { salt: string } | null =
+                await fetch(config.URL_SALT_SERVICE, requestOptions)
+                .then(res => {
+                    console.debug("[completeZkLogin] salt service success");
+                    return res.json();
+                })
+                .catch((error: unknown) => {
+                    console.warn("[completeZkLogin] salt service error:", error);
+                    return null;
+                });
+
+            if (!saltResponse) {
+                return;
+            }
+            userSalt = BigInt(saltResponse.salt);
+        }
+
+        const userAddr = jwtToAddress(jwt, userSalt);
+        
+        // Debug address calculation
+        console.log("[completeZkLogin] Address calculation details:");
+        console.log("- userSalt:", userSalt.toString());
+        console.log("- JWT sub:", jwtPayload.sub);
+        console.log("- JWT aud:", typeof jwtPayload.aud === "string" ? jwtPayload.aud : jwtPayload.aud[0]);
+        console.log("- Calculated userAddr:", userAddr);
+        
         clearSetupData();
         for (const account of accounts.current) {
             if (userAddr === account.userAddr) {
@@ -191,10 +224,16 @@ export default function ZkLoginComponent()
 
         const ephemeralKeyPair = keypairFromSecretKey(setupData.ephemeralPrivateKey);
         const ephemeralPublicKey = ephemeralKeyPair.getPublicKey();
+        const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(ephemeralPublicKey);
+        
+        console.log("[completeZkLogin] Proof generation ephemeral key details:");
+        console.log("- Ephemeral public key address:", ephemeralKeyPair.getPublicKey().toSuiAddress());
+        console.log("- Extended ephemeral public key:", extendedEphemeralPublicKey);
+        
         const payload = JSON.stringify({
             maxEpoch: setupData.maxEpoch,
             jwtRandomness: setupData.randomness,
-            extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeralPublicKey),
+            extendedEphemeralPublicKey,
             jwt,
             salt: userSalt.toString(),
             keyClaimName: "sub",
@@ -209,8 +248,16 @@ export default function ZkLoginComponent()
             body: payload,
         })
         .then(res => {
-            console.debug("[completeZkLogin] ZK proving service success");
+            console.debug("[completeZkLogin] ZK proving service success, status:", res.status);
             return res.json();
+        })
+        .then(data => {
+            console.log("[completeZkLogin] ZK proof response:", data);
+            console.log("[completeZkLogin] Proof structure:");
+            console.log("- proofPoints keys:", Object.keys(data.proofPoints || {}));
+            console.log("- issBase64Details:", typeof data.issBase64Details === 'object' ? JSON.stringify(data.issBase64Details) : data.issBase64Details?.substring(0, 50) + "...");
+            console.log("- headerBase64:", data.headerBase64?.substring(0, 50) + "...");
+            return data;
         })
         .catch((error: unknown) => {
             console.warn("[completeZkLogin] ZK proving service error:", error);
@@ -234,6 +281,13 @@ export default function ZkLoginComponent()
             aud: typeof jwtPayload.aud === "string" ? jwtPayload.aud : jwtPayload.aud[0],
             maxEpoch: setupData.maxEpoch,
         };
+        
+        console.log("[completeZkLogin] Account created:", {
+            userAddr: account.userAddr,
+            userSalt: account.userSalt,
+            ephemeralPrivateKey: account.ephemeralPrivateKey.substring(0, 20) + "...",
+            maxEpoch: account.maxEpoch
+        });
 
         login(account);
         saveAccount(account);
@@ -288,8 +342,8 @@ export default function ZkLoginComponent()
         });
     }
 
-    function keypairFromSecretKey(privateKeyBase64: string): Ed25519Keypair {
-        const keyPair = decodeSuiPrivateKey(privateKeyBase64);
+    function keypairFromSecretKey(privateKeyString: string): Ed25519Keypair {
+        const keyPair = decodeSuiPrivateKey(privateKeyString);
         return Ed25519Keypair.fromSecretKey(keyPair.secretKey);
     }
 
@@ -338,6 +392,9 @@ export default function ZkLoginComponent()
     }
 
     function loadAccounts(): AccountData[] {
+        if (typeof window === 'undefined') {
+            return []; // Return empty array during SSR
+        }
         const dataRaw = sessionStorage.getItem(accountDataKey);
         if (!dataRaw) {
             return [];
