@@ -24,4 +24,5 @@ export const endpoints = {
   adminCreatePoll: () => `/admin/create-poll`,
   adminRegisterTeam: () => `/admin/register-team`,
   adminFinalize: (id: string) => `/admin/poll/${id}/finalize`,
+  authenticateEmail: () => `/api/authenticate-email`, // New endpoint for email authentication
 };

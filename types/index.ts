@@ -18,7 +18,7 @@ export interface RegisterTeamPayload {
   pollId: string;
   teamId: TeamId;
   projectId: ProjectId;
-  memberIdentifiers: { provider: 'google'|'apple'|'microsoft'|'edu'; idToken?: string; email?: string }[]; // 4 entries
+  memberUserIds: string[]; // Array of authenticated user IDs (exactly 4 entries)
 }
 
 export interface VoteRequest {

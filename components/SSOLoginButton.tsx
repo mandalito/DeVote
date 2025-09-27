@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { detectUniversityFromEmail, getSSORedirectUrl, isValidUniversityEmail, type UniversityConfig } from '@/lib/university';
 import { useSetAtom } from 'jotai';
 import { userAtom } from '@/lib/state';
+import { postJSON, endpoints } from '@/lib/api'; // Import postJSON and endpoints
 
 interface SSOLoginButtonProps {
   size?: 'sm' | 'md' | 'lg';
@@ -14,13 +15,42 @@ interface SSOLoginButtonProps {
 
 export default function SSOLoginButton({ size = 'md', onLoginStart }: SSOLoginButtonProps) {
   const [email, setEmail] = useState('');
-  const [step, setStep] = useState<'email' | 'confirm' | 'manual'>('email');
+  const [step, setStep] = useState<'email' | 'manual' | 'processing'>('email'); // Removed 'confirm' step
   const [detectedUniversity, setDetectedUniversity] = useState<UniversityConfig | null>(null);
   const [manualSsoUrl, setManualSsoUrl] = useState('');
   const [error, setError] = useState<string>('');
+  const [authMessage, setAuthMessage] = useState<string>('');
   const setUser = useSetAtom(userAtom);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const performDomainAuthentication = async (targetEmail: string, universityConfig: UniversityConfig | null) => {
+    setStep('processing');
+    setAuthMessage('Authenticating your domain...');
+    setError('');
+
+    try {
+      // Simulate 5-second waiting time
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Call backend API to store email
+      await postJSON(endpoints.authenticateEmail(), { email: targetEmail });
+
+      setAuthMessage(`You are authenticated as ${targetEmail}!`);
+      setUser({
+        loggedIn: true,
+        email: targetEmail,
+        university: universityConfig?.name,
+      });
+      // No redirection, stay on the login page to show message
+    } catch (err: any) {
+      console.error('Domain authentication failed:', err);
+      setError(err.message || 'Failed to authenticate domain. Please try again.');
+      setAuthMessage(''); // Clear success message on error
+      setUser({ loggedIn: false }); // Ensure user is not logged in on error
+      setStep('email'); // Go back to email input on error
+    }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -29,27 +59,16 @@ export default function SSOLoginButton({ size = 'md', onLoginStart }: SSOLoginBu
       return;
     }
 
-    if (!isValidUniversityEmail(email)) {
-      setError('Please enter a valid university email address');
+    const isUniEmail = isValidUniversityEmail(email);
+    if (!isUniEmail) {
+      setError('Please enter a valid university email address.');
       return;
     }
 
     const university = detectUniversityFromEmail(email);
-    if (!university) {
-      setError('University not recognized. Please contact support or enter your SSO URL manually.');
-      setStep('manual');
-      return;
-    }
 
-    if (!university.ssoUrl) {
-      setError(`SSO URL for ${university.displayName} could not be determined. Please enter it manually.`);
-      setDetectedUniversity(university);
-      setStep('manual');
-      return;
-    }
-
-    setDetectedUniversity(university);
-    setStep('confirm');
+    // Always perform domain authentication if it's a university email.
+    await performDomainAuthentication(email, university);
   };
 
   const handleSSOLogin = (ssoUrlToUse: string) => {
@@ -72,7 +91,7 @@ export default function SSOLoginButton({ size = 'md', onLoginStart }: SSOLoginBu
     }
   };
 
-  const handleManualSsoSubmit = (e: React.FormEvent) => {
+  const handleManualSsoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!manualSsoUrl.trim()) {
@@ -85,6 +104,8 @@ export default function SSOLoginButton({ size = 'md', onLoginStart }: SSOLoginBu
       setError('Please enter a valid URL.');
       return;
     }
+
+    // If manual SSO URL is provided, it's a direct SSO flow, not domain authentication
     handleSSOLogin(manualSsoUrl);
   };
 
@@ -93,49 +114,35 @@ export default function SSOLoginButton({ size = 'md', onLoginStart }: SSOLoginBu
     setDetectedUniversity(null);
     setManualSsoUrl('');
     setError('');
+    setAuthMessage(''); // Clear auth message on back
   };
 
-  const handleGuestLogin = () => {
-    setUser({ loggedIn: false });
+  const handleGuestLogin = async () => {
+    const isUniEmail = isValidUniversityEmail(email);
+    if (isUniEmail) {
+      const university = detectUniversityFromEmail(email);
+      await performDomainAuthentication(email, university);
+    } else {
+      setUser({ loggedIn: false });
+      // No redirection, stay on the login page
+    }
   };
 
-  if (step === 'confirm' && detectedUniversity) {
+  if (step === 'processing') {
     return (
-      <div className="flex flex-col gap-3 max-w-sm">
-        <div className="text-center">
-          <div className="text-2xl mb-2">{detectedUniversity.icon}</div>
-          <h3 className="font-semibold">Login with {detectedUniversity.displayName}</h3>
-          <p className="text-sm text-zinc-400">{email}</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-xl font-semibold mb-2">{authMessage}</h2>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+          </div>
         </div>
-        
-        <div className="flex gap-2">
-          <Button 
-            size={size} 
-            onClick={() => handleSSOLogin(detectedUniversity.ssoUrl)}
-            className="flex-1"
-          >
-            Continue to {detectedUniversity.displayName}
-          </Button>
-          <Button 
-            size={size} 
-            variant="outline" 
-            onClick={handleBack}
-          >
-            Back
-          </Button>
-        </div>
-        
-        <Button 
-          size={size} 
-          variant="ghost" 
-          onClick={handleGuestLogin}
-          className="text-xs"
-        >
-          Continue as guest instead
-        </Button>
       </div>
     );
   }
+
+  // Removed 'confirm' step here
 
   if (step === 'manual') {
     return (
