@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useZkLogin } from "./contexts/ZkLoginContext";
 import { CreatePoll } from "./components/CreatePoll";
 import { Polls } from "./components/Polls";
+import { UserProfile } from "./components/UserProfile";
 import { Transaction } from "@mysten/sui/transactions";
 
 const queryClient = new QueryClient();
@@ -76,7 +77,12 @@ function App() {
             <div className="space-y-8">
               <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold">Sui Voting Dapp</h1>
-                {zkLoginAccount && <Button onClick={handleLogout}>Logout</Button>}
+                {zkLoginAccount && (
+                  <div className="flex items-center gap-3">
+                    <UserProfile account={zkLoginAccount} />
+                    <Button onClick={handleLogout}>Logout</Button>
+                  </div>
+                )}
               </div>
               
               <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
@@ -88,7 +94,7 @@ function App() {
                   execute={execute}
                   isPending={isPending}
                   walletAddress={account?.address}
-                  zkLoginAccountAddress={zkLoginAccount?.address}
+                  zkLoginAccountAddress={zkLoginAccount?.userAddr}
                 />
               </div>
             </div>
