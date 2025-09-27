@@ -146,6 +146,8 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
     const [loading, setLoading] = useState(true);
     const [showGroupDialog, setShowGroupDialog] = useState(false);
     const [selectedPoll, setSelectedPoll] = useState<{ pollId: string; groupId: number; pollType: string } | null>(null);
+    const [expandedPolls, setExpandedPolls] = useState<Set<string>>(new Set());
+    const [loadingDetails, setLoadingDetails] = useState<Set<string>>(new Set());
 
     // Fetch all polls and their associated projects
     useEffect(() => {
@@ -192,11 +194,12 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                         if (pollResponse.data?.content && 'fields' in pollResponse.data.content) {
                             const fields = pollResponse.data.content.fields as any;
                             
-                            // Fetch group data using smart contract helper functions
+                            // Skip detailed group data loading for now - load on demand
                             let groupsData: { [groupId: string]: Group } = {};
                             let userToGroupData: { [userAddress: string]: string } = {};
                             
-                            if (fields.groups_enabled && zkLoginAccountAddress) {
+                            // Only load group data if this poll is expanded
+                            if (false) { // Disabled for fast loading - will be loaded on expand
                                 try {
                                     // Check which group the current user is in
                                     const userGroupResult = await suiClient.devInspectTransactionBlock({
@@ -332,12 +335,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     group_tally: fields.group_tally?.fields || {},
                                 };
                                 
-                                console.log(`Poll ${pollId} - Final poll data:`, {
-                                    poll_type: poll.poll_type,
-                                    user_to_group: poll.user_to_group,
-                                    groups_count: Object.keys(poll.groups).length,
-                                    user_address: zkLoginAccountAddress
-                                });
+                                // Poll loaded with basic info only - details loaded on demand
                             pollsData.push(poll);
                             
                             // Collect all project IDs for fetching (only for static polls)
@@ -393,7 +391,164 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         };
 
         fetchPolls();
-    }, [suiClient, votingPackageId, pollRegistryId, refreshTrigger]); // Add pollRegistryId to dependencies
+    }, [suiClient, votingPackageId, pollRegistryId, refreshTrigger]);
+
+    // Load detailed group data for a specific poll (on-demand)
+    const loadPollDetails = async (pollId: string) => {
+        if (!votingPackageId || !zkLoginAccountAddress) return;
+        
+        setLoadingDetails(prev => new Set([...Array.from(prev), pollId]));
+        
+        try {
+            console.log(`🔍 Loading detailed data for poll ${pollId}...`);
+            
+            const poll = polls.find(p => p.id === pollId);
+            if (!poll || !poll.groups_enabled) return;
+            
+            let groupsData: { [groupId: string]: Group } = {};
+            let userToGroupData: { [userAddress: string]: string } = {};
+            
+            // Check which group the current user is in
+            const userGroupResult = await suiClient.devInspectTransactionBlock({
+                transactionBlock: (() => {
+                    const tx = new Transaction();
+                    tx.moveCall({
+                        target: `${votingPackageId}::voting::get_user_group_id`,
+                        arguments: [
+                            tx.object(pollId),
+                            tx.pure.address(zkLoginAccountAddress)
+                        ]
+                    });
+                    return tx;
+                })(),
+                sender: zkLoginAccountAddress
+            });
+            
+            if (userGroupResult.results?.[0]?.returnValues?.[0]) {
+                const returnValue = userGroupResult.results[0].returnValues[0];
+                
+                // Parse u64 from BCS - it's encoded as 8 bytes
+                let userGroupId = 999; // Default to "not in any group"
+                
+                if (Array.isArray(returnValue[0]) && returnValue[0].length === 8) {
+                    // BCS u64 is little-endian 8 bytes
+                    const bytes = returnValue[0];
+                    userGroupId = 0;
+                    for (let i = 0; i < 8; i++) {
+                        userGroupId += bytes[i] * Math.pow(256, i);
+                    }
+                }
+                
+                if (userGroupId !== 999 && userGroupId < parseInt(poll.max_groups || '0')) { 
+                    userToGroupData[zkLoginAccountAddress] = userGroupId.toString();
+                }
+            }
+            
+            // Fetch group members for each group
+            const maxGroups = parseInt(poll.max_groups || '0');
+            for (let i = 0; i < maxGroups; i++) {
+                try {
+                    const groupMembersResult = await suiClient.devInspectTransactionBlock({
+                        transactionBlock: (() => {
+                            const tx = new Transaction();
+                            tx.moveCall({
+                                target: `${votingPackageId}::voting::get_group_members`,
+                                arguments: [
+                                    tx.object(pollId),
+                                    tx.pure.u64(i.toString())
+                                ]
+                            });
+                            return tx;
+                        })(),
+                        sender: zkLoginAccountAddress
+                    });
+                    
+                    if (groupMembersResult.results?.[0]?.returnValues?.[0]) {
+                        const returnValue = groupMembersResult.results[0].returnValues[0];
+                        
+                        // Parse the members array from the BCS encoded result
+                        let members: string[] = [];
+                        try {
+                            if (returnValue[0] && Array.isArray(returnValue[0])) {
+                                const rawBytes = returnValue[0];
+                                
+                                if (rawBytes.length > 1) {
+                                    // BCS encoded vector of addresses
+                                    const vectorLength = rawBytes[0];
+                                    
+                                    if (vectorLength > 0 && rawBytes.length >= 1 + (vectorLength * 32)) {
+                                        for (let addrIdx = 0; addrIdx < vectorLength; addrIdx++) {
+                                            const startIdx = 1 + (addrIdx * 32);
+                                            const endIdx = startIdx + 32;
+                                            const addrBytes = rawBytes.slice(startIdx, endIdx);
+                                            const addr = `0x${addrBytes.map((b: number) => b.toString(16).padStart(2, '0')).join('')}`;
+                                            members.push(addr);
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (parseError) {
+                            console.warn(`Failed to parse group ${i} members:`, parseError);
+                        }
+                        
+                        groupsData[i.toString()] = {
+                            id: i.toString(),
+                            name: '', // Will be set when someone joins
+                            description: '', // Will be set when someone joins
+                            members: members,
+                            is_full: members.length >= parseInt(poll.participants_per_group || '0'),
+                            creator: members.length > 0 ? members[0] : '',
+                        };
+                    }
+                } catch (error) {
+                    console.warn(`Failed to fetch group ${i} members:`, error);
+                }
+            }
+            
+            // Update the specific poll with detailed data
+            setPolls(prevPolls => 
+                prevPolls.map(p => 
+                    p.id === pollId 
+                        ? { ...p, groups: groupsData, user_to_group: userToGroupData }
+                        : p
+                )
+            );
+            
+            console.log(`✅ Loaded details for poll ${pollId}`);
+            
+        } catch (error) {
+            console.error(`❌ Failed to load details for poll ${pollId}:`, error);
+        } finally {
+            setLoadingDetails(prev => {
+                const newSet = new Set(Array.from(prev));
+                newSet.delete(pollId);
+                return newSet;
+            });
+        }
+    };
+
+    // Toggle poll expansion
+    const togglePollExpansion = (pollId: string) => {
+        const isExpanded = expandedPolls.has(pollId);
+        
+        if (isExpanded) {
+            // Collapse
+            setExpandedPolls(prev => {
+                const newSet = new Set(Array.from(prev));
+                newSet.delete(pollId);
+                return newSet;
+            });
+        } else {
+            // Expand and load details
+            setExpandedPolls(prev => new Set([...Array.from(prev), pollId]));
+            
+            const poll = polls.find(p => p.id === pollId);
+            if (poll && poll.groups_enabled && Object.keys(poll.groups).length === 0) {
+                // Only load if we haven't loaded details yet
+                loadPollDetails(pollId);
+            }
+        }
+    };
 
     const handleJoinGroup = async (pollId: string, groupId: number, groupName?: string, groupDescription?: string) => {
         if (!votingPackageId) {
@@ -429,11 +584,9 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
             await execute(tx);
             console.log("Successfully joined group:", groupId);
             const groupDisplayName = groupName || `Group ${groupId + 1}`;
-            alert(`Successfully joined ${groupDisplayName}! The page will refresh to show updated group membership.`);
-            // Refresh polls to show updated group membership
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            alert(`Successfully joined ${groupDisplayName}! Loading updated group data...`);
+            // Refresh the specific poll's details instead of full page reload
+            await loadPollDetails(pollId);
         } catch (error) {
             console.error("Failed to join group:", error);
             if (error.message.includes("13")) {
@@ -481,10 +634,9 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         try {
             await execute(tx);
             console.log("Successfully voted for group:", targetGroupId);
-            alert(`Vote cast for Group ${targetGroupId + 1}! The page will refresh to show updated results.`);
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            alert(`Vote cast for Group ${targetGroupId + 1}! Loading updated results...`);
+            // Refresh the specific poll's details
+            await loadPollDetails(pollId);
         } catch (error) {
             console.error("Failed to vote for group:", error);
             alert("Failed to cast vote. See console for details.");
@@ -589,18 +741,49 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                             )}
                         </CardTitle>
                         <CardDescription>{poll.description}</CardDescription>
-                                   <div className="text-sm text-gray-500 space-y-1">
-                                       <p>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</p>
-                                       <p>Status: {poll.finalized ? 'Finalized' : 'Active'}</p>
-                                       {poll.groups_enabled && (
-                                           <p>Groups: {poll.max_groups} groups × {poll.participants_per_group} participants</p>
-                                       )}
-                                   </div>
+                        <div className="text-sm text-gray-500 space-y-1">
+                            <p>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</p>
+                            <p>Status: {poll.finalized ? 'Finalized' : 'Active'}</p>
+                            {poll.groups_enabled && (
+                                <p>Capacity: {poll.max_groups} {poll.poll_type === 'individual' ? 'participants' : `groups × ${poll.participants_per_group} members`}</p>
+                            )}
+                        </div>
+                        
+                        {/* Expand/Collapse Button */}
+                        {(poll.groups_enabled || poll.choices.length > 0) && (
+                            <div className="mt-3">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => togglePollExpansion(poll.id)}
+                                    disabled={loadingDetails.has(poll.id)}
+                                    className="flex items-center gap-2"
+                                >
+                                    {loadingDetails.has(poll.id) ? (
+                                        <>
+                                            <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
+                                            Loading...
+                                        </>
+                                    ) : expandedPolls.has(poll.id) ? (
+                                        <>
+                                            ▼ Hide Details
+                                        </>
+                                    ) : (
+                                        <>
+                                            ▶ Show {poll.poll_type === 'individual' ? 'Participants' : poll.poll_type === 'group' ? 'Groups' : 'Choices'}
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {poll.poll_type === 'individual' || poll.poll_type === 'group' ? (
-                            // Dynamic poll UI
-                            <div className="space-y-6">
+                        {/* Only show detailed content when expanded */}
+                        {expandedPolls.has(poll.id) && (
+                            <>
+                                {poll.poll_type === 'individual' || poll.poll_type === 'group' ? (
+                                    // Dynamic poll UI
+                                    <div className="space-y-6">
                                 <div className={`border rounded-lg p-4 ${
                                     poll.poll_type === 'individual' 
                                         ? 'bg-green-50 border-green-200' 
@@ -647,17 +830,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             const userInThisGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] === groupId;
                                             const userInAnyGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] !== undefined;
                                             
-                                            // Debug logging for this specific group
-                                            if (i === 0) { // Only log for first group to avoid spam
-                                                console.log(`Poll ${poll.id} - Group UI Debug:`, {
-                                                    userAddress: zkLoginAccountAddress,
-                                                    userToGroup: poll.user_to_group,
-                                                    userInThisGroup,
-                                                    userInAnyGroup,
-                                                    groupId,
-                                                    pollType: poll.poll_type
-                                                });
-                                            }
+                                            // Group UI logic
                                             const groupExists = group !== undefined;
                                             const groupName = group?.name || '';
                                             const groupDescription = group?.description || '';
@@ -757,79 +930,57 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                             className="text-xs"
                                                                         >
                                                                             Vote {targetName}
-                                                                        </Button>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                        </Button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                                                   
+                                                    {userInAnyGroup && !userInThisGroup && (
+                                                        <div className="text-xs text-gray-500 italic">
+                                                            You're already in another group
                                                         </div>
                                                     )}
-                                                                   
-                                                                   {userInAnyGroup && !userInThisGroup && (
-                                                                       <div className="text-xs text-gray-500 italic">
-                                                                           You're already in another group
-                                                                       </div>
-                                                                   )}
-                                                               </div>
-                                                           </div>
-                                                       );
-                                                   })}
-                                               </div>
-                                           </div>
-
-                                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                               <div className="flex justify-between items-center">
-                                                   <div>
-                                                       <p className="text-sm text-blue-800">
-                                                           <strong>📊 Current Status:</strong> This poll has existing group memberships.
-                                                           {zkLoginAccountAddress && (
-                                                               <span className="block mt-1">
-                                                                   <strong>Your Status:</strong> You may already be in a group. 
-                                                                   Create a new poll to test fresh group joining!
-                                                               </span>
-                                                           )}
-                                                       </p>
-                                                   </div>
-                                                   <Button 
-                                                       size="sm" 
-                                                       variant="outline"
-                                                       onClick={() => window.location.reload()}
-                                                       className="ml-4"
-                                                   >
-                                                       🔄 Refresh
-                                                   </Button>
-                                               </div>
-                                           </div>
-                                       </div>
-                                   ) : (
-                                       // Regular poll UI (existing)
-                                       <div>
-                        <p className="font-semibold">Choices:</p>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                                               {poll.choices.map((projectId) => {
-                                                   const project = projects[projectId];
-                                                   const voteCount = poll.tally[projectId] || '0';
-                                                   return (
-                                <Button
-                                                           key={projectId}
-                                    variant="outline"
-                                                           onClick={() => handleVote(poll.id, projectId)}
-                                                           disabled={isPending || poll.finalized}
-                                                           className="flex-1"
-                                                       >
-                                                           <div className="text-left">
-                                                               <div className="font-medium">
-                                                                   {project?.name || `Project ${projectId.slice(0, 8)}...`}
-                                                               </div>
-                                                               <div className="text-xs text-gray-500">
-                                                                   {voteCount} votes
-                                                               </div>
-                                                           </div>
-                                </Button>
-                                                   );
-                                               })}
-                                           </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
-                                   )}
+                    ) : (
+                        // Regular poll UI (existing)
+                        <div>
+                            <p className="font-semibold">Choices:</p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                {poll.choices.map((projectId) => {
+                                    const project = projects[projectId];
+                                    const voteCount = poll.tally[projectId] || '0';
+                                    return (
+                                        <Button
+                                            key={projectId}
+                                            variant="outline"
+                                            onClick={() => handleVote(poll.id, projectId)}
+                                            disabled={isPending || poll.finalized}
+                                            className="flex-1"
+                                        >
+                                            <div className="text-left">
+                                                <div className="font-medium">
+                                                    {project?.name || `Project ${projectId.slice(0, 8)}...`}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {voteCount} votes
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                            </>
+                        )}
                     </CardContent>
                 </Card>
                 ))
