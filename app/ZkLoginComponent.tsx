@@ -478,10 +478,10 @@ export default function ZkLoginComponent()
                                             >
                                                 Send transaction
                                             </Button>
-                                            {balance === 0 && (
+                                            {balance === 0 && NETWORK !== 'mainnet' && (
                                                 <Button
                                                     onClick={() => {
-                                                        requestSuiFromFaucet(NETWORK, acct.userAddr);
+                                                        requestSuiFromFaucet(NETWORK as 'testnet' | 'devnet' | 'localnet', acct.userAddr);
                                                         setModalContent("💰 Requesting SUI from faucet...");
                                                         setTimeout(() => setModalContent(null), 3000);
                                                     }}
