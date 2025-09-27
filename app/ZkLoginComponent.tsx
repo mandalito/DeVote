@@ -12,10 +12,14 @@ import {
     jwtToAddress,
 } from "@mysten/sui/zklogin";
 import { NetworkName, makePolymediaUrl, requestSuiFromFaucet, shortenAddress } from "@polymedia/suitcase-core";
-import { LinkExternal, isLocalhost } from "@polymedia/suitcase-react";
+import { isLocalhost } from "@polymedia/suitcase-react";
 import { jwtDecode } from "jwt-decode";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useZkLogin } from "@/app/contexts/ZkLoginContext";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /* Configuration */
 
@@ -57,10 +61,11 @@ type AccountData = {
 
 export default function ZkLoginComponent()
 {
+    const { login } = useZkLogin();
+    const router = useRouter();
     const accounts = useRef<AccountData[]>(loadAccounts()); 
     const [balances, setBalances] = useState<Map<string, number>>(new Map()); 
     const [modalContent, setModalContent] = useState<string | null>(null);
-    const modalRef = useRef<HTMLDialogElement>(null);
 
     useEffect(() => {
         completeZkLogin();
@@ -68,14 +73,6 @@ export default function ZkLoginComponent()
         const interval = setInterval(() => fetchBalances(accounts.current), 5_000);
         return () => {clearInterval(interval);};
     }, []);
-
-    useEffect(() => {
-        if (modalContent && modalRef.current) {
-            modalRef.current.showModal();
-        } else if (!modalContent && modalRef.current) {
-            modalRef.current.close();
-        }
-    }, [modalContent]);
 
     async function beginZkLogin(provider: OpenIdProvider)
     {
@@ -227,7 +224,7 @@ export default function ZkLoginComponent()
             return;
         }
 
-        saveAccount({
+        const account = {
             provider: setupData.provider,
             userAddr,
             zkProofs,
@@ -236,7 +233,11 @@ export default function ZkLoginComponent()
             sub: jwtPayload.sub,
             aud: typeof jwtPayload.aud === "string" ? jwtPayload.aud : jwtPayload.aud[0],
             maxEpoch: setupData.maxEpoch,
-        });
+        };
+
+        login(account);
+        saveAccount(account);
+        router.push('/');
     }
 
     async function sendTransaction(account: AccountData) {
@@ -354,83 +355,95 @@ export default function ZkLoginComponent()
     const openIdProviders: OpenIdProvider[] = isLocalhost()
         ? ["Google", "Twitch", "Facebook"]
         : ["Google", "Twitch"];
+        
     return (
-    <div id="page">
-        <dialog
-            ref={modalRef}
-            onClose={() => setModalContent(null)}
-        >
-            {modalContent}
-        </dialog>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+            <Dialog open={modalContent !== null} onOpenChange={(open) => !open && setModalContent(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Loading</DialogTitle>
+                    </DialogHeader>
+                    {modalContent}
+                </DialogContent>
+            </Dialog>
 
-        <h1>Sui zkLogin demo</h1>
+            <Card className="w-full max-w-md">
+                <CardHeader>
+                    <CardTitle className="text-2xl font-bold text-center">Sui zkLogin</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <h3 className="text-lg font-semibold">Log in:</h3>
+                            <div className="flex flex-col space-y-2">
+                                {openIdProviders.map(provider => (
+                                    <Button
+                                        key={provider}
+                                        onClick={() => beginZkLogin(provider)}
+                                        variant="outline"
+                                        className="w-full"
+                                    >
+                                        {provider}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
 
-        <div id="login-buttons" className="section">
-            <h2>Log in:</h2>
-            {openIdProviders.map(provider =>
-                <button
-                    className={`btn-login ${provider}`}
-                    onClick={() => {beginZkLogin(provider);} }
-                    key={provider}
-                >
-                    {provider}
-                </button>
-            )}
-        </div>
+                        {accounts.current.length > 0 && (
+                            <div className="space-y-4 pt-4 border-t">
+                                <h3 className="text-lg font-semibold">Accounts:</h3>
+                                {accounts.current.map(acct => {
+                                    const balance = balances.get(acct.userAddr);
+                                    const explorerLink = makePolymediaUrl(NETWORK, "address", acct.userAddr);
+                                    return (
+                                        <div key={acct.userAddr} className="p-4 border rounded-lg space-y-2">
+                                            <div>
+                                                <span className={`px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800`}>
+                                                    {acct.provider}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <strong>Address:</strong>{" "}
+                                                <a href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                    {shortenAddress(acct.userAddr)}
+                                                </a>
+                                            </div>
+                                            <div><strong>User ID:</strong> {acct.sub}</div>
+                                            <div><strong>Balance:</strong> {typeof balance === "undefined" ? "(loading)" : `${balance} SUI`}</div>
+                                            <Button
+                                                onClick={() => sendTransaction(acct)}
+                                                disabled={!balance}
+                                                className="w-full"
+                                            >
+                                                Send transaction
+                                            </Button>
+                                            {balance === 0 && (
+                                                <Button
+                                                    onClick={() => {
+                                                        requestSuiFromFaucet(NETWORK, acct.userAddr);
+                                                        setModalContent("💰 Requesting SUI from faucet...");
+                                                        setTimeout(() => setModalContent(null), 3000);
+                                                    }}
+                                                    variant="secondary"
+                                                    className="w-full"
+                                                >
+                                                    Use faucet
+                                                </Button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
 
-        { accounts.current.length > 0 &&
-        <div id="accounts" className="section">
-            <h2>Accounts:</h2>
-            {accounts.current.map(acct => {
-                const balance = balances.get(acct.userAddr);
-                const explorerLink = makePolymediaUrl(NETWORK, "address", acct.userAddr);
-                return (
-                <div className="account" key={acct.userAddr}>
-                    <div>
-                        <label className={`provider ${acct.provider}`}>{acct.provider}</label>
+                        <div className="pt-4 border-t">
+                            <Button onClick={clearState} variant="destructive" className="w-full">
+                                🧨 Clear State
+                            </Button>
+                        </div>
                     </div>
-                    <div>
-                        Address: <a target="_blank" rel="noopener noreferrer" href={explorerLink}>
-                            {shortenAddress(acct.userAddr)}
-                        </a>
-                    </div>
-                    <div>User ID: {acct.sub}</div>
-                    <div>Balance: {typeof balance === "undefined" ? "(loading)" : `${balance} SUI`}</div>
-                    <button
-                        className={`btn-send ${!balance ? "disabled" : ""}`}
-                        disabled={!balance}
-                        onClick={() => {sendTransaction(acct);}}
-                    >
-                        Send transaction
-                    </button>
-                    { balance === 0 &&
-                        <button
-                            className="btn-faucet"
-                            onClick={() => {
-                                requestSuiFromFaucet(NETWORK, acct.userAddr);
-                                setModalContent("💰 Requesting SUI from faucet. This will take a few seconds...");
-                                setTimeout(() => { setModalContent(null); }, 3000);
-                            }}
-                        >
-                            Use faucet
-                        </button>
-                    }
-                    <hr/>
-                </div>
-                );
-            })}
+                </CardContent>
+            </Card>
         </div>
-        }
-
-        <div className="section">
-            <button
-                className="btn-clear"
-                onClick={() => { clearState(); }}
-            >
-                🧨 CLEAR STATE
-            </button>
-        </div>
-
-    </div>
     );
 };

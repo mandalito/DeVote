@@ -15,11 +15,10 @@ import { CounterList } from "./components/CounterList";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useZkLogin } from "./contexts/ZkLoginContext";
 
 const queryClient = new QueryClient();
 
@@ -37,8 +36,13 @@ function AppWithProviders() {
 
 function App() {
   const currentAccount = useCurrentAccount();
+  const { account: zkLoginAccount, logout: zkLogout } = useZkLogin();
   const [counterId, setCounter] = useState<string | null>(null);
   const [view, setView] = useState<"create" | "search" | "counter">("create");
+
+  const account = currentAccount || (zkLoginAccount ? {
+    address: zkLoginAccount.userAddr,
+    } : null);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -66,12 +70,22 @@ function App() {
     window.location.hash = "";
   };
 
+  const handleLogout = () => {
+    if (zkLoginAccount) {
+      zkLogout();
+    }
+  }
+
   return (
     <div className="container mx-auto p-6">
       <Card className="min-h-[500px]">
         <CardContent className="pt-6">
-          {currentAccount ? (
-            counterId ? (
+          {account ? (
+            <div>
+              <div className="flex justify-end">
+                {zkLoginAccount && <Button onClick={handleLogout}>Logout</Button>}
+              </div>
+            {counterId ? (
               <div className="space-y-4">
                 {/* Back button when viewing a counter */}
                 <div className="flex justify-between items-center">
@@ -127,7 +141,8 @@ function App() {
                   <CounterList onSelectCounter={handleCounterSelected} />
                 )}
               </div>
-            )
+            )}
+            </div>
           ) : (
             <div className="text-center py-12">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
