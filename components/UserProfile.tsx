@@ -3,21 +3,26 @@
 import { useAtomValue } from 'jotai';
 import { userAtom } from '@/lib/state';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 interface UserProfileProps {
   showLogin?: boolean;
-  onLoginClick?: () => void;
 }
 
-export default function UserProfile({ showLogin = true, onLoginClick }: UserProfileProps) {
+export default function UserProfile({ showLogin = true }: UserProfileProps) {
   const user = useAtomValue(userAtom);
+  const router = useRouter();
+
+  const handleLoginClick = () => {
+    router.push('/login');
+  };
 
   if (!user || !user.loggedIn) {
     if (!showLogin) return null;
     
     return (
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onLoginClick}>
+        <Button size="sm" onClick={handleLoginClick}>
           Login with Student Account
         </Button>
       </div>

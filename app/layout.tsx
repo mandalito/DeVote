@@ -19,7 +19,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <nav className="flex gap-4 text-sm text-zinc-300">
                 <Link href="/">Polls</Link>
                 <Link href="/admin">Admin</Link>
-                <Link href="/demo">Demo</Link>
               </nav>
               <UserProfile />
             </div>

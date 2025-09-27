@@ -91,7 +91,7 @@ export function detectUniversityFromEmail(email: string): UniversityConfig | nul
       ...GENERIC_UNIVERSITY_TEMPLATE,
       domain,
       displayName: domain.split('.')[0].toUpperCase(),
-      ssoUrl: `https://auth.${domain}/sso/login`
+      ssoUrl: '' // Explicitly set to empty for generic domains to trigger manual input
     };
   }
 
