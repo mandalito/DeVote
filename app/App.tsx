@@ -21,7 +21,7 @@ const queryClient = new QueryClient();
 function AppWithProviders() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+      <SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
         <WalletProvider>
           <App />
         </WalletProvider>

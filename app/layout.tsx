@@ -28,7 +28,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <QueryClientProvider client={queryClient}>
-          <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+          <SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
             <WalletProvider>
               <ZkLoginProvider>{children}</ZkLoginProvider>
             </WalletProvider>

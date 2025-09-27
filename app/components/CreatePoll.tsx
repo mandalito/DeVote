@@ -12,8 +12,8 @@ import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
 // AdminCap is no longer needed - each poll creator gets their own AdminCap automatically
 
 // We'll use the Project objects we created as poll choices.
-const DUMMY_CHOICE_1 = "0xb99f56709c5747e96bacddabfdda4b8d59a268c8f477791a8c00c8306b5510e2"; // Project A
-const DUMMY_CHOICE_2 = "0x7a97e6f389fa9907fcab672d92bef32c17def1077cbd0a25c3267bd61335c726"; // Project B
+const DUMMY_CHOICE_1 = "0x1acd97d251ba9b53d322e7e8d1b95d8ef746afcd06a47c54609a1ebf867d16cc"; // Project Alpha (devnet)
+const DUMMY_CHOICE_2 = "0x2f464feace37e030292265c426fa36001a72ed8ce842bdf1dd191210e58ac092"; // Project Beta (devnet)
 
 export function CreatePoll({
     execute,
@@ -50,11 +50,11 @@ export function CreatePoll({
         console.log("Network config debug:");
         console.log("- useNetworkVariable result:", votingPackageId);
         console.log("- All network variables:", JSON.stringify(allNetworkVars, null, 2));
-        console.log("- Expected testnet package ID: 0x0e9c865803a828baeab8c9d4088a9b60565b354b78d1ed22fd6dc1f9d31cab18");
+        console.log("- Expected devnet package ID: 0x5833033134626ae19f7de7d92b1b82b46f6976830499cd401d57315371ddf55b");
         
         // Let's also check the RPC URL
-        console.log("- Frontend testnet RPC URL:", getFullnodeUrl('testnet'));
-        console.log("- CLI testnet RPC URL: https://fullnode.testnet.sui.io:443");
+        console.log("- Frontend devnet RPC URL:", getFullnodeUrl('devnet'));
+        console.log("- CLI devnet RPC URL: https://fullnode.devnet.sui.io:443");
 
         tx.moveCall({
             target: `${votingPackageId}::voting::create_simple_poll`,

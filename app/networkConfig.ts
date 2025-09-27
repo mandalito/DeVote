@@ -24,8 +24,8 @@ export const networkConfig = {
   devnet: {
     url: getFullnodeUrl('devnet'),
     variables: {
-      votingPackageId: '0xTODO_REPLACE_WITH_YOUR_VOTING_PACKAGE_ID',
-      votingRegistryId: '0xTODO_REPLACE_WITH_YOUR_VOTING_REGISTRY_ID',
+      votingPackageId: '0x5833033134626ae19f7de7d92b1b82b46f6976830499cd401d57315371ddf55b',
+      votingRegistryId: '0x031f04ff2ee86a5059b1d50a255ef2ba586f2cb3a55b80bc04deda911c051015',
     }
   },
 };

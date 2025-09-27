@@ -5,10 +5,11 @@ import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
-import { genAddressSeed, getZkLoginSignature } from "@mysten/sui/zklogin";
+import { genAddressSeed, getZkLoginSignature, getExtendedEphemeralPublicKey } from "@mysten/sui/zklogin";
+import { useSuiClient } from "@mysten/dapp-kit";
 
 const accountDataKey = "zklogin-demo.accounts";
-const NETWORK = "testnet";
+const NETWORK = "devnet";
 
 type AccountData = {
     provider: string;
@@ -34,7 +35,7 @@ const ZkLoginContext = createContext<ZkLoginContextType | undefined>(undefined);
 export const ZkLoginProvider = ({ children }: { children: ReactNode }) => {
   const [account, setAccount] = useState<AccountData | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const suiClient = new SuiClient({ url: getFullnodeUrl(NETWORK) });
+  const suiClient = useSuiClient();
 
   useEffect(() => {
     const loadAccount = async () => {
@@ -95,32 +96,34 @@ export const ZkLoginProvider = ({ children }: { children: ReactNode }) => {
     setIsPending(true);
     try {
       console.log("zkLogin: Setting transaction sender to:", account.userAddr);
-      //transaction.setSender(account.userAddr);
+      console.log("🔄 RESTORING zkLogin ADDRESS FOR PROPER zkLogin FLOW");
+      transaction.setSender(account.userAddr); // zkLogin address
 
       console.log("zkLogin: Creating ephemeral keypair...");
+      const keyPair = decodeSuiPrivateKey(account.ephemeralPrivateKey);
+      const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(keyPair.secretKey);
+      
       console.log("zkLogin: Account data:", {
         provider: account.provider,
         userAddr: account.userAddr,
         maxEpoch: account.maxEpoch,
         sub: account.sub,
-        aud: account.aud
+        aud: account.aud,
+        ephemeralPrivateKey: account.ephemeralPrivateKey
       });
-      const keyPair = decodeSuiPrivateKey(account.ephemeralPrivateKey);
-      const constantKeyPair = "suiprivkey1qzajeccejzyxp2calmtxx03ahkp0uyyag72ezp5h6l0pnjqvn8hxsedtjka"
-      //const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(keyPair.secretKey);
-      const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(constantKeyPair);
-      transaction.setSender(ephemeralKeyPair.getPublicKey().toSuiAddress());
+      
+      console.log("zkLogin: Ephemeral public key:", ephemeralKeyPair.getPublicKey().toSuiAddress());
+      console.log("zkLogin: zkLogin address (userAddr):", account.userAddr);
+      
+      // Verify the ephemeral key matches what was used for proof generation
+      const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(ephemeralKeyPair.getPublicKey());
+      console.log("zkLogin: Extended ephemeral public key:", extendedEphemeralPublicKey);
       console.log("zkLogin: About to sign transaction...");
       console.log("zkLogin: Transaction data:", transaction);
       console.log("zkLogin address:", ephemeralKeyPair.getPublicKey().toSuiAddress());
-      // Try creating a fresh SuiClient to bypass any caching issues
-      const freshClient = new SuiClient({
-        url: "https://fullnode.testnet.sui.io:443"
-      });
-      
-      console.log("zkLogin: Using fresh SuiClient for signing...");
+      console.log("zkLogin: Using configured SuiClient from dapp-kit...");
       const { bytes, signature: userSignature } = await transaction.sign({
-        client: freshClient,
+        client: suiClient,
         signer: ephemeralKeyPair,
       });
       console.log("zkLogin: Transaction signed successfully");
@@ -132,6 +135,22 @@ export const ZkLoginProvider = ({ children }: { children: ReactNode }) => {
         account.aud,
       ).toString();
 
+      console.log("zkLogin: Address seed generation:");
+      console.log("- userSalt:", account.userSalt);
+      console.log("- sub:", account.sub);
+      console.log("- aud:", account.aud);
+      console.log("- addressSeed:", addressSeed);
+      console.log("- zkProofs keys:", Object.keys(account.zkProofs));
+      
+      // Debug: Compare with jwtToAddress calculation
+      console.log("zkLogin: Verification - jwtToAddress result:", account.userAddr);
+      console.log("zkLogin: Should match the userAddr from proof generation");
+
+      console.log("zkLogin: Constructing zkLogin signature with:");
+      console.log("- maxEpoch:", account.maxEpoch);
+      console.log("- userSignature length:", userSignature.length);
+      console.log("- addressSeed:", addressSeed);
+      
       const zkLoginSignature = getZkLoginSignature({
         inputs: {
           ...account.zkProofs,
@@ -140,14 +159,17 @@ export const ZkLoginProvider = ({ children }: { children: ReactNode }) => {
         maxEpoch: account.maxEpoch,
         userSignature,
       });
+      
+      console.log("zkLogin: zkLoginSignature created, length:", zkLoginSignature.length);
 
-      console.log("zkLogin: Executing transaction with fresh client...");
-      const result = await freshClient.executeTransactionBlock({
+      console.log("zkLogin: Executing transaction with dapp-kit client...");
+      console.log("🚀 USING zkLogin SIGNATURE FOR PROPER AUTHENTICATION");
+      const result = await suiClient.executeTransactionBlock({
         transactionBlock: bytes,
-        //signature: zkLoginSignature,
-        signature: userSignature,
+        signature: zkLoginSignature, // Using zkLogin signature
         options: {
           showEffects: true,
+          showEvents: true,
         },
       });
       console.log("zkLogin: Transaction executed successfully:", result.digest);
