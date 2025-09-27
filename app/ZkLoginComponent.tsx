@@ -485,7 +485,7 @@ export default function ZkLoginComponent()
                                                         setModalContent("💰 Requesting SUI from faucet...");
                                                         setTimeout(() => setModalContent(null), 3000);
                                                     }}
-                                                    variant="secondary"
+                                                    variant="outline"
                                                     className="w-full"
                                                 >
                                                     Use faucet
