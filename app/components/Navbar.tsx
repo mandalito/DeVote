@@ -87,11 +87,6 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center space-x-4 ml-auto">
-          {currentAccount && (
-            <Link href="/team/register" passHref>
-              <Button variant="outline">Team Registration</Button>
-            </Link>
-          )}
           <ConnectButton />
         </div>
       </NavigationMenuList>

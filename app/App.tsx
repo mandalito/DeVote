@@ -1,4 +1,5 @@
-'use client'
+'use client';
+import React, { useState } from "react";
 import {
   SuiClientProvider,
   WalletProvider,
@@ -16,7 +17,6 @@ import { CreatePoll } from "./components/CreatePoll";
 import { Polls } from "./components/Polls";
 import { UserProfile } from "./components/UserProfile";
 import { Transaction } from "@mysten/sui/transactions";
-import { useState } from "react";
 
 const queryClient = new QueryClient();
 
@@ -48,13 +48,13 @@ function App() {
 
   const account = currentAccount || (zkLoginAccount ? {
     address: zkLoginAccount.userAddr,
-    } : null);
+  } : null);
 
   const handleLogout = () => {
     if (zkLoginAccount) {
       zkLogout();
     }
-  }
+  };
 
   const execute = async (
     transaction: Transaction,
@@ -72,58 +72,74 @@ function App() {
   const isPending = isZkLoginTxPending || isWalletTxPending;
 
   return (
-    <div className="container mx-auto p-6">
-      <Card>
-        <CardContent className="pt-6">
+    <div className="min-h-screen w-full">
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              🗳️ DeVote
+            </h1>
+            {account && zkLoginAccount && (
+              <div className="flex items-center gap-3">
+                <div className="text-black">
+                  <UserProfile account={zkLoginAccount} />
+                </div>
+                <Button onClick={handleLogout} variant="outline" className="text-black border-black hover:bg-black hover:text-white">
+                  Logout
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-black min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {account ? (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold">Sui Voting Dapp</h1>
-                {zkLoginAccount && (
-                  <div className="flex items-center gap-3">
-                    <UserProfile account={zkLoginAccount} />
-                    <Button onClick={handleLogout}>Logout</Button>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex gap-4">
-                <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
-                  // Refresh polls list when a new poll is created
-                  setPollsRefreshTrigger(prev => prev + 1);
-                  console.log("Poll created, refreshing polls list...");
-                }} />
-                <Link href="/team/register" passHref>
-                  <Button>Team Registration</Button>
-                </Link>
-              </div>
+            <div className="flex gap-4">
+              <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
+                setPollsRefreshTrigger(prev => prev + 1);
+                console.log("Poll created, refreshing polls list...");
+              }} />
+            </div>
 
-              <div className="mt-8">
-                <Polls
-                  execute={execute}
-                  isPending={isPending}
-                  walletAddress={account?.address}
-                  zkLoginAccountAddress={zkLoginAccount?.userAddr}
-                  refreshTrigger={pollsRefreshTrigger}
-                />
-              </div>
+            <div className="mt-8">
+              <Polls
+                execute={execute}
+                isPending={isPending}
+                walletAddress={account?.address}
+                zkLoginAccountAddress={zkLoginAccount?.userAddr}
+                refreshTrigger={pollsRefreshTrigger}
+              />
+            </div>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Welcome to the Sui Voting Dapp
-              </h2>
-              <p className="text-gray-600">
-                Please connect your wallet or{" "}
-                <Link href="/zklogin" className="text-blue-500 underline">
-                  log in with zkLogin
-                </Link>
-                {" "}to participate.
-              </p>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <Card className="w-full max-w-md">
+                <CardContent className="pt-6">
+                  <div className="text-center space-y-4">
+                    <div className="text-6xl mb-4">🗳️</div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      Welcome to DeVote
+                    </h2>
+                    <p className="text-gray-600">
+                      Connect your wallet or use zkLogin to create and participate in dynamic polls
+                    </p>
+                    <div className="pt-4">
+                      <Link href="/zklogin">
+                        <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                          🚀 Login with zkLogin
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
