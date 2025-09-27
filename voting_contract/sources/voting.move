@@ -45,6 +45,12 @@ module voting::voting {
         used_nullifiers: Table<vector<u8>, bool>,
     }
 
+    // New: Global registry to track all polls
+    public struct PollRegistry has key {
+        id: UID,
+        polls: vector<ID>, // List of all poll IDs
+    }
+
     public struct Project has key {
         id: UID,
         name: String,
@@ -92,6 +98,13 @@ module voting::voting {
         };
         transfer::share_object(reg);
 
+        // Create global poll registry
+        let poll_registry = PollRegistry {
+            id: sui::object::new(ctx),
+            polls: vector::empty<ID>(),
+        };
+        transfer::share_object(poll_registry);
+
         let admin = AdminCap { id: sui::object::new(ctx) };
         transfer::transfer(admin, sui::tx_context::sender(ctx));
     }
@@ -133,6 +146,7 @@ module voting::voting {
 
     // Simplified version for testing - creates a poll with just two fixed choices
     public entry fun create_simple_poll(
+        poll_registry: &mut PollRegistry,
         name: String,
         description: String,
         choice1: ID,
@@ -157,6 +171,12 @@ module voting::voting {
             finalized: false,
             tally,
         };
+        
+        let poll_id = sui::object::id(&poll);
+        
+        // Register the poll in the global registry
+        vector::push_back(&mut poll_registry.polls, poll_id);
+        
         transfer::share_object(poll);
 
         // Create a new AdminCap for this poll's creator
@@ -165,6 +185,7 @@ module voting::voting {
     }
 
     public entry fun create_poll(
+        poll_registry: &mut PollRegistry,
         name: String,
         description: String,
         choices: vector<ID>,
@@ -190,11 +211,27 @@ module voting::voting {
             finalized: false,
             tally,
         };
+        
+        let poll_id = sui::object::id(&poll);
+        
+        // Register the poll in the global registry
+        vector::push_back(&mut poll_registry.polls, poll_id);
+        
         transfer::share_object(poll);
 
         // Create a new AdminCap for this poll's creator
         let poll_admin = AdminCap { id: sui::object::new(ctx) };
         transfer::transfer(poll_admin, sui::tx_context::sender(ctx));
+    }
+
+    // Get all poll IDs from the registry
+    public fun get_all_polls(poll_registry: &PollRegistry): vector<ID> {
+        poll_registry.polls
+    }
+
+    // Get the number of polls in the registry
+    public fun get_poll_count(poll_registry: &PollRegistry): u64 {
+        vector::length(&poll_registry.polls)
     }
 
     public fun register_team(

@@ -38,6 +38,7 @@ export function CreatePoll({
     };
     const [deadlineDate, setDeadlineDate] = useState(getDefaultDeadline());
     const votingPackageId = useNetworkVariable("votingPackageId");
+    const pollRegistryId = useNetworkVariable("pollRegistryId");
     const allNetworkVars = useNetworkVariables();
 
     const create = () => {
@@ -69,6 +70,7 @@ export function CreatePoll({
         tx.moveCall({
             target: `${votingPackageId}::voting::create_simple_poll`,
             arguments: [
+                tx.object(pollRegistryId),       // PollRegistry
                 tx.pure.string(name),            // String
                 tx.pure.string(description), 
                 //tx.pure.vector('id', [ choiceIds[0]]),    // String
@@ -93,7 +95,49 @@ export function CreatePoll({
         execute(tx, {
             onSuccess: (result) => {
                 console.log("Poll created successfully:", result);
-                alert("Poll created successfully!");
+                console.log("Full result object:", JSON.stringify(result, null, 2));
+                
+                // Try to extract poll ID from the transaction result
+                let pollId = null;
+                
+                // Method 1: Check objectChanges for created Poll objects
+                if (result.objectChanges) {
+                    const pollChange = result.objectChanges.find((change: any) => 
+                        change.type === 'created' && 
+                        change.objectType && 
+                        change.objectType.includes('::voting::Poll')
+                    );
+                    
+                    if (pollChange) {
+                        pollId = pollChange.objectId;
+                        console.log("Found poll ID from objectChanges:", pollId);
+                    }
+                }
+                
+                // Method 2: Check effects.created (if available)
+                if (!pollId && result.effects?.created) {
+                    const createdObjects = result.effects.created;
+                    const pollObject = createdObjects.find((obj: any) => 
+                        obj.reference?.objectId
+                    );
+                    
+                    if (pollObject) {
+                        pollId = pollObject.reference.objectId;
+                        console.log("Found poll ID from effects.created:", pollId);
+                    }
+                }
+                
+                if (pollId) {
+                    console.log("Created poll ID:", pollId);
+                    console.log("Poll automatically registered in PollRegistry on-chain!");
+                    
+                    onCreated(pollId);
+                    alert(`Poll created successfully! ID: ${pollId.slice(0, 10)}...\nAll users can now see this poll!`);
+                } else {
+                    console.warn("Could not extract poll ID from result. Available keys:", Object.keys(result));
+                    onCreated(result.digest);
+                    alert("Poll created successfully! Check console for transaction details.");
+                }
             }
         });
     }

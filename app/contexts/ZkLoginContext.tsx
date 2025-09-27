@@ -170,10 +170,12 @@ export const ZkLoginProvider = ({ children }: { children: ReactNode }) => {
         options: {
           showEffects: true,
           showEvents: true,
+          showObjectChanges: true, // Add this to get object changes
         },
       });
       console.log("zkLogin: Transaction executed successfully:", result.digest);
-      return { digest: result.digest };
+      console.log("zkLogin: Full transaction result:", result);
+      return result; // Return the full result object instead of just digest
     } finally {
       setIsPending(false);
     }

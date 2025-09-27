@@ -16,6 +16,7 @@ import { CreatePoll } from "./components/CreatePoll";
 import { Polls } from "./components/Polls";
 import { UserProfile } from "./components/UserProfile";
 import { Transaction } from "@mysten/sui/transactions";
+import { useState } from "react";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ function App() {
     executeTransaction: executeZkLoginTx,
     isPending: isZkLoginTxPending,
   } = useZkLogin();
+  const [pollsRefreshTrigger, setPollsRefreshTrigger] = useState(0);
   const {
     mutate: signAndExecute,
     isPending: isWalletTxPending,
@@ -86,8 +88,9 @@ function App() {
               </div>
               
               <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
-                // In a real app, you would refetch the list of polls here
-                console.log("Poll created, refetching polls would happen here.");
+                // Refresh polls list when a new poll is created
+                setPollsRefreshTrigger(prev => prev + 1);
+                console.log("Poll created, refreshing polls list...");
               }} />
               <div className="mt-8">
                 <Polls
@@ -95,6 +98,7 @@ function App() {
                   isPending={isPending}
                   walletAddress={account?.address}
                   zkLoginAccountAddress={zkLoginAccount?.userAddr}
+                  refreshTrigger={pollsRefreshTrigger}
                 />
               </div>
             </div>

@@ -3,53 +3,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useNetworkVariable } from "@/app/networkConfig";
 import { Transaction } from '@mysten/sui/transactions';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { useState, useEffect } from 'react';
 
-// This is a placeholder component.
-// In the future, it will fetch and display a list of polls.
-const getRandomHex = () => `0x${[...Array(64)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-const FAKE_POLL_ID_1 = getRandomHex();
-const FAKE_POLL_ID_2 = getRandomHex();
-const FAKE_CHOICE_ID_A = getRandomHex();
-const FAKE_CHOICE_ID_B = getRandomHex();
-const FAKE_CHOICE_ID_C = getRandomHex();
-const FAKE_CHOICE_ID_D = getRandomHex();
-const FAKE_CHOICE_ID_E = getRandomHex();
-const FAKE_CHOICE_ID_F = getRandomHex();
+// Real poll fetching and display component
 
 
 type Poll = {
     id: string;
     name: string;
     description: string;
-    choices: { id: string, name: string }[];
-    votes: Record<string, number>;
+    choices: string[]; // Array of project IDs
+    deadline_ms: string;
+    finalized: boolean;
+    tally: { [projectId: string]: string }; // Vote counts as strings
 };
 
-// Replace with actual poll data fetching
-const samplePolls: Poll[] = [
-    {
-        id: FAKE_POLL_ID_1, // Replace with actual on-chain object IDs
-        name: "Favorite Programming Language",
-        description: "What is your favorite language for smart contracts?",
-        choices: [
-            { id: FAKE_CHOICE_ID_A, name: "Move" },
-            { id: FAKE_CHOICE_ID_B, name: "Rust" },
-            { id: FAKE_CHOICE_ID_C, name: "Solidity" },
-        ],
-        votes: { [FAKE_CHOICE_ID_A]: 10, [FAKE_CHOICE_ID_B]: 5, [FAKE_CHOICE_ID_C]: 2 },
-    },
-    {
-        id: FAKE_POLL_ID_2, // Replace with actual on-chain object IDs
-        name: "Next Hackathon Location",
-        description: "Where should we host the next Sui hackathon?",
-        choices: [
-            { id: FAKE_CHOICE_ID_D, name: "Paris" },
-            { id: FAKE_CHOICE_ID_E, name: "New York" },
-            { id: FAKE_CHOICE_ID_F, name: "Singapore" },
-        ],
-        votes: { [FAKE_CHOICE_ID_D]: 8, [FAKE_CHOICE_ID_E]: 12, [FAKE_CHOICE_ID_F]: 7 },
-    },
-];
+type Project = {
+    id: string;
+    name: string;
+    description: string;
+};
 
 
 type PollsProps = {
@@ -57,12 +31,125 @@ type PollsProps = {
     isPending: boolean;
     walletAddress?: string;
     zkLoginAccountAddress?: string;
+    refreshTrigger?: number; // Add trigger to refresh polls
 };
 
-export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress }: PollsProps) {
+export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress, refreshTrigger }: PollsProps) {
+    const suiClient = useSuiClient();
     const votingPackageId = useNetworkVariable('votingPackageId');
     const votingRegistryId = useNetworkVariable('votingRegistryId');
-    const polls = samplePolls; // Use sample data for now
+    const pollRegistryId = useNetworkVariable('pollRegistryId');
+    const [polls, setPolls] = useState<Poll[]>([]);
+    const [projects, setProjects] = useState<{ [id: string]: Project }>({});
+    const [loading, setLoading] = useState(true);
+
+    // Fetch all polls and their associated projects
+    useEffect(() => {
+        const fetchPolls = async () => {
+            if (!votingPackageId || !pollRegistryId) return;
+            
+            try {
+                setLoading(true);
+                
+                // Fetch poll IDs from the PollRegistry
+                console.log("Fetching polls from PollRegistry:", pollRegistryId);
+                
+                const registryResponse = await suiClient.getObject({
+                    id: pollRegistryId,
+                    options: {
+                        showContent: true,
+                        showType: true
+                    }
+                });
+
+                let pollIds: string[] = [];
+                if (registryResponse.data?.content && 'fields' in registryResponse.data.content) {
+                    const fields = registryResponse.data.content.fields as any;
+                    pollIds = fields.polls || [];
+                    console.log("Found poll IDs from registry:", pollIds);
+                } else {
+                    console.log("No polls found in registry or registry not found");
+                }
+                
+                const pollsData: Poll[] = [];
+                const projectIds = new Set<string>();
+                
+                // Fetch each poll by ID
+                for (const pollId of pollIds) {
+                    try {
+                        const pollResponse = await suiClient.getObject({
+                            id: pollId,
+                            options: {
+                                showContent: true,
+                                showType: true
+                            }
+                        });
+
+                        if (pollResponse.data?.content && 'fields' in pollResponse.data.content) {
+                            const fields = pollResponse.data.content.fields as any;
+                            const poll: Poll = {
+                                id: pollResponse.data.objectId,
+                                name: fields.name,
+                                description: fields.description,
+                                choices: fields.choices,
+                                deadline_ms: fields.deadline_ms,
+                                finalized: fields.finalized,
+                                tally: fields.tally?.fields || {}
+                            };
+                            pollsData.push(poll);
+                            
+                            // Collect all project IDs for fetching
+                            fields.choices.forEach((projectId: string) => {
+                                projectIds.add(projectId);
+                            });
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch poll ${pollId}:`, error);
+                    }
+                }
+
+                // Fetch all Project objects
+                const projectsData: { [id: string]: Project } = {};
+                for (const projectId of projectIds) {
+                    try {
+                        const projectResponse = await suiClient.getObject({
+                            id: projectId,
+                            options: {
+                                showContent: true,
+                                showType: true
+                            }
+                        });
+
+                        if (projectResponse.data?.content && 'fields' in projectResponse.data.content) {
+                            const fields = projectResponse.data.content.fields as any;
+                            projectsData[projectId] = {
+                                id: projectId,
+                                name: fields.name,
+                                description: fields.description
+                            };
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch project ${projectId}:`, error);
+                        // Add fallback project data
+                        projectsData[projectId] = {
+                            id: projectId,
+                            name: `Project ${projectId.slice(0, 8)}...`,
+                            description: 'Project details unavailable'
+                        };
+                    }
+                }
+
+                setPolls(pollsData);
+                setProjects(projectsData);
+            } catch (error) {
+                console.error('Failed to fetch polls:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPolls();
+    }, [suiClient, votingPackageId, pollRegistryId, refreshTrigger]); // Add pollRegistryId to dependencies
 
     const handleVote = async (pollId: string, choiceId: string) => {
         if (!votingPackageId || !votingRegistryId) {
@@ -96,32 +183,65 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         }
     };
 
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <h2 className="text-2xl font-bold">Available Polls</h2>
+                <div className="text-center py-8">
+                    <p className="text-gray-500">Loading polls...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold">Available Polls</h2>
-            {polls.map((poll) => (
-                <Card key={poll.id}>
-                    <CardHeader>
-                        <CardTitle>{poll.name}</CardTitle>
-                        <CardDescription>{poll.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <p className="font-semibold">Choices:</p>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            {poll.choices.map((choice) => (
-                                <Button
-                                    key={choice.id}
-                                    variant="outline"
-                                    onClick={() => handleVote(poll.id, choice.id)}
-                                    disabled={isPending}
-                                >
-                                    {choice.name} ({poll.votes[choice.id] || 0} votes)
-                                </Button>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            ))}
+            {polls.length === 0 ? (
+                <div className="text-center py-8">
+                    <p className="text-gray-500">No polls found. Create the first poll above!</p>
+                </div>
+            ) : (
+                polls.map((poll) => (
+                    <Card key={poll.id}>
+                        <CardHeader>
+                            <CardTitle>{poll.name}</CardTitle>
+                            <CardDescription>{poll.description}</CardDescription>
+                            <div className="text-sm text-gray-500 space-y-1">
+                                <p>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</p>
+                                <p>Status: {poll.finalized ? 'Finalized' : 'Active'}</p>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <p className="font-semibold">Choices:</p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                {poll.choices.map((projectId) => {
+                                    const project = projects[projectId];
+                                    const voteCount = poll.tally[projectId] || '0';
+                                    return (
+                                        <Button
+                                            key={projectId}
+                                            variant="outline"
+                                            onClick={() => handleVote(poll.id, projectId)}
+                                            disabled={isPending || poll.finalized}
+                                            className="flex-1"
+                                        >
+                                            <div className="text-left">
+                                                <div className="font-medium">
+                                                    {project?.name || `Project ${projectId.slice(0, 8)}...`}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {voteCount} votes
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))
+            )}
         </div>
     );
 }
