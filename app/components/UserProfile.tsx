@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Copy, ExternalLink, User } from "lucide-react";
 import { makePolymediaUrl, shortenAddress } from "@polymedia/suitcase-core";
+import { useSuiClient } from "@mysten/dapp-kit";
 
 type AccountData = {
     provider: string;
@@ -26,6 +27,23 @@ interface UserProfileProps {
 export function UserProfile({ account }: UserProfileProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [currentEpoch, setCurrentEpoch] = useState<number | null>(null);
+    const suiClient = useSuiClient();
+
+    useEffect(() => {
+        const fetchCurrentEpoch = async () => {
+            try {
+                const systemState = await suiClient.getLatestSuiSystemState();
+                setCurrentEpoch(Number(systemState.epoch));
+            } catch (error) {
+                console.error('Error fetching current epoch:', error);
+            }
+        };
+
+        if (isOpen) {
+            fetchCurrentEpoch();
+        }
+    }, [isOpen, suiClient]);
 
     const copyToClipboard = async (text: string, field: string) => {
         try {
@@ -167,11 +185,35 @@ export function UserProfile({ account }: UserProfileProps) {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-600">Session Valid Until Epoch</label>
-                                    <div className="p-3 bg-gray-50 rounded-lg">
-                                        <code className="text-sm font-mono text-gray-900">
-                                            {account.maxEpoch}
-                                        </code>
+                                    <label className="text-sm font-medium text-gray-600">Session Expires</label>
+                                    <div className="p-3 bg-gray-50 rounded-lg space-y-2">
+                                        {currentEpoch ? (
+                                            <>
+                                                <div className="text-sm font-medium text-gray-900">
+                                                    {(() => {
+                                                        const epochsRemaining = account.maxEpoch - currentEpoch;
+                                                        const hoursRemaining = epochsRemaining * 24; // 1 epoch ≈ 24 hours
+                                                        const expirationDate = new Date(Date.now() + (hoursRemaining * 60 * 60 * 1000));
+                                                        return expirationDate.toLocaleString();
+                                                    })()}
+                                                </div>
+                                                <div className="text-xs text-gray-600">
+                                                    Epoch {account.maxEpoch} (≈ {Math.max(0, account.maxEpoch - currentEpoch)} epochs remaining)
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    Current epoch: {currentEpoch}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="text-sm font-medium text-gray-900">
+                                                    Loading expiration time...
+                                                </div>
+                                                <div className="text-xs text-gray-600">
+                                                    Epoch {account.maxEpoch}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 

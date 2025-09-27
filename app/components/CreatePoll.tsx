@@ -30,7 +30,13 @@ export function CreatePoll({
     const [name, setName] = useState("Dummy Poll: Best System Object?");
     const [description, setDescription] = useState("A poll to decide the best system object.");
     const [choices, setChoices] = useState(`${DUMMY_CHOICE_1}, ${DUMMY_CHOICE_2}`);
-    const [deadline, setDeadline] = useState(String(Date.now() + 86400000)); // 24 hours from now
+    
+    // Initialize deadline to 24 hours from now in datetime-local format
+    const getDefaultDeadline = () => {
+        const tomorrow = new Date(Date.now() + 86400000); // 24 hours from now
+        return tomorrow.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:MM
+    };
+    const [deadlineDate, setDeadlineDate] = useState(getDefaultDeadline());
     const votingPackageId = useNetworkVariable("votingPackageId");
     const allNetworkVars = useNetworkVariables();
 
@@ -38,13 +44,17 @@ export function CreatePoll({
         const tx = new Transaction();
         //tx.setSender("0xc899b84f50e994b0b595c38919f0ca4e0b94f7758548e2494b1a6c9ddfdbfbfb");
         const choiceIds = choices.split(",").map(s => s.trim()).filter(Boolean);
+        
+        // Convert datetime-local to Unix timestamp in milliseconds
+        const deadlineTimestamp = new Date(deadlineDate).getTime();
 
         console.log("Creating transaction with:");
         console.log("- Package ID:", votingPackageId);
         console.log("- Choice IDs:", choiceIds);
         console.log("- Name:", name);
         console.log("- Description:", description);
-        console.log("- Deadline:", deadline);
+        console.log("- Deadline Date:", deadlineDate);
+        console.log("- Deadline Unix Timestamp:", deadlineTimestamp);
         
         // Debug network configuration
         console.log("Network config debug:");
@@ -64,7 +74,7 @@ export function CreatePoll({
                 //tx.pure.vector('id', [ choiceIds[0]]),    // String
                tx.pure.id(choiceIds[0]),         // ID (choice1)
                tx.pure.id(choiceIds[1] || choiceIds[0]), // ID (choice2, fallback to choice1 if only one)
-                tx.pure.u64(String(deadline)),   // u64
+                tx.pure.u64(String(deadlineTimestamp)),   // u64 - Unix timestamp in milliseconds
             ],
         });
 
@@ -109,8 +119,23 @@ export function CreatePoll({
                         <Input id="choices" value={choices} onChange={(e) => setChoices(e.target.value)} placeholder="0x..., 0x..., 0x..." />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="deadline">Deadline (Unix timestamp in ms)</Label>
-                        <Input id="deadline" value={deadline} onChange={(e) => setDeadline(e.target.value)} placeholder="e.g., 1735689600000" type="number" />
+                        <Label htmlFor="deadline">Poll Deadline</Label>
+                        <input 
+                            id="deadline" 
+                            type="datetime-local" 
+                            value={deadlineDate} 
+                            onChange={(e) => setDeadlineDate(e.target.value)}
+                            min={new Date().toISOString().slice(0, 16)} // Prevent selecting past dates
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{
+                                colorScheme: 'dark',
+                                filter: 'invert(1)'
+                            }}
+                        />
+                        <p className="text-xs text-gray-500">
+                            Selected: {new Date(deadlineDate).toLocaleString()} 
+                            ({new Date(deadlineDate).getTime()}ms)
+                        </p>
                     </div>
                     <Button onClick={create} className="w-full" disabled={isPending}>
                         {isPending ? "Creating..." : "Create Poll"}
