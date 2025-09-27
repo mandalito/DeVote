@@ -682,4 +682,34 @@ module voting::voting {
             999 // Return 999 if user not in any group
         }
     }
+
+    // Get group name
+    public fun get_group_name(poll: &Poll, group_id: u64): String {
+        if (sui::table::contains(&poll.groups, group_id)) {
+            let group = sui::table::borrow(&poll.groups, group_id);
+            group.name
+        } else {
+            std::string::utf8(b"")
+        }
+    }
+
+    // Get group description
+    public fun get_group_description(poll: &Poll, group_id: u64): String {
+        if (sui::table::contains(&poll.groups, group_id)) {
+            let group = sui::table::borrow(&poll.groups, group_id);
+            group.description
+        } else {
+            std::string::utf8(b"")
+        }
+    }
+
+    // Get group creator
+    public fun get_group_creator(poll: &Poll, group_id: u64): address {
+        if (sui::table::contains(&poll.groups, group_id)) {
+            let group = sui::table::borrow(&poll.groups, group_id);
+            group.creator
+        } else {
+            @0x0
+        }
+    }
 }

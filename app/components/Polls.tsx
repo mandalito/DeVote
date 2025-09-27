@@ -491,14 +491,102 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                             console.warn(`Failed to parse group ${i} members:`, parseError);
                         }
                         
-                        groupsData[i.toString()] = {
-                            id: i.toString(),
-                            name: '', // Will be set when someone joins
-                            description: '', // Will be set when someone joins
-                            members: members,
-                            is_full: members.length >= parseInt(poll.participants_per_group || '0'),
-                            creator: members.length > 0 ? members[0] : '',
-                        };
+                                // Fetch group name and description if group has members
+                                let groupName = '';
+                                let groupDescription = '';
+                                let groupCreator = '';
+                                
+                                if (members.length > 0) {
+                                    try {
+                                        // Get group name
+                                        const nameResult = await suiClient.devInspectTransactionBlock({
+                                            transactionBlock: (() => {
+                                                const tx = new Transaction();
+                                                tx.moveCall({
+                                                    target: `${votingPackageId}::voting::get_group_name`,
+                                                    arguments: [
+                                                        tx.object(pollId),
+                                                        tx.pure.u64(i.toString())
+                                                    ]
+                                                });
+                                                return tx;
+                                            })(),
+                                            sender: zkLoginAccountAddress
+                                        });
+                                        
+                                        if (nameResult.results?.[0]?.returnValues?.[0]) {
+                                            const nameBytes = nameResult.results[0].returnValues[0][0];
+                                            if (Array.isArray(nameBytes) && nameBytes.length > 1) {
+                                                const nameLength = nameBytes[0];
+                                                if (nameLength > 0) {
+                                                    const nameStr = String.fromCharCode(...nameBytes.slice(1, 1 + nameLength));
+                                                    groupName = nameStr;
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Get group description
+                                        const descResult = await suiClient.devInspectTransactionBlock({
+                                            transactionBlock: (() => {
+                                                const tx = new Transaction();
+                                                tx.moveCall({
+                                                    target: `${votingPackageId}::voting::get_group_description`,
+                                                    arguments: [
+                                                        tx.object(pollId),
+                                                        tx.pure.u64(i.toString())
+                                                    ]
+                                                });
+                                                return tx;
+                                            })(),
+                                            sender: zkLoginAccountAddress
+                                        });
+                                        
+                                        if (descResult.results?.[0]?.returnValues?.[0]) {
+                                            const descBytes = descResult.results[0].returnValues[0][0];
+                                            if (Array.isArray(descBytes) && descBytes.length > 1) {
+                                                const descLength = descBytes[0];
+                                                if (descLength > 0) {
+                                                    const descStr = String.fromCharCode(...descBytes.slice(1, 1 + descLength));
+                                                    groupDescription = descStr;
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Get group creator
+                                        const creatorResult = await suiClient.devInspectTransactionBlock({
+                                            transactionBlock: (() => {
+                                                const tx = new Transaction();
+                                                tx.moveCall({
+                                                    target: `${votingPackageId}::voting::get_group_creator`,
+                                                    arguments: [
+                                                        tx.object(pollId),
+                                                        tx.pure.u64(i.toString())
+                                                    ]
+                                                });
+                                                return tx;
+                                            })(),
+                                            sender: zkLoginAccountAddress
+                                        });
+                                        
+                                        if (creatorResult.results?.[0]?.returnValues?.[0]) {
+                                            const creatorBytes = creatorResult.results[0].returnValues[0][0];
+                                            if (Array.isArray(creatorBytes) && creatorBytes.length === 32) {
+                                                groupCreator = `0x${creatorBytes.map((b: number) => b.toString(16).padStart(2, '0')).join('')}`;
+                                            }
+                                        }
+                                    } catch (error) {
+                                        console.warn(`Failed to fetch group ${i} details:`, error);
+                                    }
+                                }
+
+                                groupsData[i.toString()] = {
+                                    id: i.toString(),
+                                    name: groupName,
+                                    description: groupDescription,
+                                    members: members,
+                                    is_full: members.length >= parseInt(poll.participants_per_group || '0'),
+                                    creator: groupCreator || (members.length > 0 ? members[0] : ''),
+                                };
                     }
                 } catch (error) {
                     console.warn(`Failed to fetch group ${i} members:`, error);
@@ -831,7 +919,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             const userInAnyGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] !== undefined;
                                             
                                             // Group UI logic
-                                            const groupExists = group !== undefined;
+                                            const groupExists = group !== undefined && (group.members.length > 0 || group.name !== '');
                                             const groupName = group?.name || '';
                                             const groupDescription = group?.description || '';
                                             const voteCount = poll.group_tally[groupId] || '0';
@@ -844,11 +932,14 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             
                                             return (
                                                 <div key={i} className="border rounded-lg p-3 bg-gray-50">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <div>
-                                                            <h5 className="font-medium">{displayName}</h5>
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex-1 mr-3">
+                                                            <h5 className="font-medium text-gray-900">{displayName}</h5>
                                                             {groupDescription && (
-                                                                <p className="text-xs text-gray-600 mt-1">{groupDescription}</p>
+                                                                <p className="text-sm text-gray-700 mt-1 italic">"{groupDescription}"</p>
+                                                            )}
+                                                            {groupExists && !groupDescription && (
+                                                                <p className="text-xs text-gray-500 mt-1">No description provided</p>
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-2">
@@ -868,16 +959,23 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                <div className="space-y-2">
                                                    {members.length > 0 ? (
                                                        <div className="text-sm text-gray-600">
-                                                           <div className="font-medium mb-1">Members ({members.length}):</div>
+                                                           <div className="font-medium mb-1">
+                                                               {isIndividual ? 'Participant:' : `Members (${members.length}):`}
+                                                           </div>
                                                            <div className="space-y-1">
                                                                {members.map((addr, idx) => (
                                                                    <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border">
                                                                        <code className="text-xs font-mono text-gray-800">
                                                                            {addr.slice(0, 10)}...{addr.slice(-8)}
                                                                        </code>
-                                                                       {addr === zkLoginAccountAddress && (
-                                                                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">You</span>
-                                                                       )}
+                                                                       <div className="flex gap-1">
+                                                                           {addr === group?.creator && (
+                                                                               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Creator</span>
+                                                                           )}
+                                                                           {addr === zkLoginAccountAddress && (
+                                                                               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">You</span>
+                                                                           )}
+                                                                       </div>
                                                                    </div>
                                                                ))}
                                                            </div>
