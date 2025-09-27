@@ -362,9 +362,13 @@ export default function ZkLoginComponent()
                 +suiBalance.totalBalance/1_000_000_000
             );
         }
-        setBalances(prevBalances =>
-            new Map([...prevBalances, ...newBalances])
-        );
+        setBalances(prevBalances => {
+            const combined = new Map(prevBalances);
+            newBalances.forEach((value, key) => {
+                combined.set(key, value);
+            });
+            return combined;
+        });
     }
 
     function saveSetupData(data: SetupData) {
