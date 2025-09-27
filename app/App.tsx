@@ -1,5 +1,9 @@
 'use client'
-import { SuiClientProvider, WalletProvider, useCurrentAccount } from "@mysten/dapp-kit";
+import {
+  SuiClientProvider,
+  WalletProvider,
+  useCurrentAccount,
+} from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@mysten/dapp-kit/dist/index.css";
 import { networkConfig } from "./networkConfig";
@@ -8,13 +12,19 @@ import { useState, useEffect } from "react";
 import { Counter } from "./Counter";
 import { CreateCounter } from "./CreateCounter";
 import { CounterList } from "./components/CounterList";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 const queryClient = new QueryClient();
 
 function AppWithProviders() {
-  return(
+  return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig}>
         <WalletProvider>
@@ -22,38 +32,38 @@ function AppWithProviders() {
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
-  )
+  );
 }
 
 function App() {
   const currentAccount = useCurrentAccount();
   const [counterId, setCounter] = useState<string | null>(null);
-  const [view, setView] = useState<'create' | 'search' | 'counter'>('create');
+  const [view, setView] = useState<"create" | "search" | "counter">("create");
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
     if (isValidSuiObjectId(hash)) {
       setCounter(hash);
-      setView('counter');
+      setView("counter");
     }
   }, []);
 
   const handleCounterCreated = (id: string) => {
     window.location.hash = id;
     setCounter(id);
-    setView('counter');
+    setView("counter");
   };
 
   const handleCounterSelected = (id: string) => {
     window.location.hash = id;
     setCounter(id);
-    setView('counter');
+    setView("counter");
   };
 
   const goBackToSelection = () => {
     setCounter(null);
-    setView('create');
-    window.location.hash = '';
+    setView("create");
+    window.location.hash = "";
   };
 
   return (
@@ -65,7 +75,7 @@ function App() {
               <div className="space-y-4">
                 {/* Back button when viewing a counter */}
                 <div className="flex justify-between items-center">
-                  <Button 
+                  <Button
                     onClick={goBackToSelection}
                     variant="outline"
                     className="border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -76,7 +86,7 @@ function App() {
                     Counter ID: {counterId.slice(0, 8)}...{counterId.slice(-8)}
                   </div>
                 </div>
-                
+
                 {/* Counter component */}
                 <Counter id={counterId} />
               </div>
@@ -85,21 +95,23 @@ function App() {
                 {/* Navigation with proper styling */}
                 <div className="flex justify-center space-x-4">
                   <Button
-                    variant={view === 'create' ? 'primary' : 'outline'}
-                    onClick={() => setView('create')}
-                    className={view === 'create' 
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    variant={view === "create" ? "primary" : "outline"}
+                    onClick={() => setView("create")}
+                    className={
+                      view === "create"
+                        ? "bg-blue-600 hover:bg-blue-700 text-white"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
                     }
                   >
                     Create New Counter
                   </Button>
                   <Button
-                    variant={view === 'search' ? 'primary' : 'outline'}
-                    onClick={() => setView('search')}
-                    className={view === 'search' 
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    variant={view === "search" ? "primary" : "outline"}
+                    onClick={() => setView("search")}
+                    className={
+                      view === "search"
+                        ? "bg-blue-600 hover:bg-blue-700 text-white"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
                     }
                   >
                     Find Existing Counter
@@ -107,19 +119,27 @@ function App() {
                 </div>
 
                 {/* Content based on view */}
-                {view === 'create' && (
+                {view === "create" && (
                   <CreateCounter onCreated={handleCounterCreated} />
                 )}
-                
-                {view === 'search' && (
+
+                {view === "search" && (
                   <CounterList onSelectCounter={handleCounterSelected} />
                 )}
               </div>
             )
           ) : (
             <div className="text-center py-12">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Counter App</h2>
-              <p className="text-gray-600">Please connect your wallet to get started</p>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Welcome to Counter App
+              </h2>
+              <p className="text-gray-600">
+                Please connect your wallet to get started or{" "}
+                <Link href="/zklogin" className="text-blue-500 underline">
+                  log in with zkLogin
+                </Link>
+                .
+              </p>
             </div>
           )}
         </CardContent>
