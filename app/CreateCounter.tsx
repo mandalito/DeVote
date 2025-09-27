@@ -1,23 +1,24 @@
 import { Transaction } from "@mysten/sui/transactions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
 import ClipLoader from "react-spinners/ClipLoader";
 
 export function CreateCounter({
   onCreated,
+  execute,
+  isPending,
 }: {
   onCreated: (id: string) => void;
+  execute: (
+    { transaction }: { transaction: Transaction },
+    { onSuccess }: { onSuccess: (result: any) => void }
+  ) => void;
+  isPending: boolean;
 }) {
   const counterPackageId = useNetworkVariable("counterPackageId");
   const suiClient = useSuiClient();
-  const {
-    mutate: signAndExecute,
-    isSuccess,
-    isPending,
-  } = useSignAndExecuteTransaction();
-
 
   function create() {
     console.log('creating tx')
@@ -28,7 +29,7 @@ export function CreateCounter({
       target: `${counterPackageId}::counter::create`,
     });
 
-    signAndExecute(
+    execute(
       {
         transaction: tx,
       },
@@ -61,10 +62,10 @@ export function CreateCounter({
           onClick={() => {
             create();
           }}
-          disabled={isSuccess || isPending}
+          disabled={isPending}
           className="w-full text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
         >
-          {isSuccess || isPending ? <ClipLoader size={20} color="white" /> : "Create Counter"}
+          {isPending ? <ClipLoader size={20} color="white" /> : "Create Counter"}
         </Button>
       </CardContent>
     </Card>

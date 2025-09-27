@@ -1,125 +1,109 @@
 'use client'
-import { SuiClientProvider, WalletProvider, useCurrentAccount } from "@mysten/dapp-kit";
+import {
+  SuiClientProvider,
+  WalletProvider,
+  useCurrentAccount,
+  useSignAndExecuteTransaction,
+} from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@mysten/dapp-kit/dist/index.css";
 import { networkConfig } from "./networkConfig";
-import { isValidSuiObjectId } from "@mysten/sui/utils";
-import { useState, useEffect } from "react";
-import { Counter } from "./Counter";
-import { CreateCounter } from "./CreateCounter";
-import { CounterList } from "./components/CounterList";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useZkLogin } from "./contexts/ZkLoginContext";
+import { CreatePoll } from "./components/CreatePoll";
+import { Polls } from "./components/Polls";
+import { Transaction } from "@mysten/sui/transactions";
 
 const queryClient = new QueryClient();
 
 function AppWithProviders() {
-  return(
+  return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig}>
+      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
         <WalletProvider>
           <App />
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
-  )
+  );
 }
 
 function App() {
   const currentAccount = useCurrentAccount();
-  const [counterId, setCounter] = useState<string | null>(null);
-  const [view, setView] = useState<'create' | 'search' | 'counter'>('create');
+  const { 
+    account: zkLoginAccount, 
+    logout: zkLogout,
+    executeTransaction: executeZkLoginTx,
+    isPending: isZkLoginTxPending,
+  } = useZkLogin();
+  const {
+    mutate: signAndExecute,
+    isPending: isWalletTxPending,
+  } = useSignAndExecuteTransaction();
 
-  useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (isValidSuiObjectId(hash)) {
-      setCounter(hash);
-      setView('counter');
+  const account = currentAccount || (zkLoginAccount ? {
+    address: zkLoginAccount.userAddr,
+    } : null);
+
+  const handleLogout = () => {
+    if (zkLoginAccount) {
+      zkLogout();
     }
-  }, []);
+  }
 
-  const handleCounterCreated = (id: string) => {
-    window.location.hash = id;
-    setCounter(id);
-    setView('counter');
+  const execute = async (
+    transaction: Transaction,
+    options?: { onSuccess: (result: any) => void }
+  ) => {
+    const { onSuccess } = options || {};
+    if (zkLoginAccount) {
+      const result = await executeZkLoginTx(transaction);
+      onSuccess?.(result);
+    } else {
+      signAndExecute({ transaction }, { onSuccess: onSuccess || (() => {}) });
+    }
   };
 
-  const handleCounterSelected = (id: string) => {
-    window.location.hash = id;
-    setCounter(id);
-    setView('counter');
-  };
-
-  const goBackToSelection = () => {
-    setCounter(null);
-    setView('create');
-    window.location.hash = '';
-  };
+  const isPending = isZkLoginTxPending || isWalletTxPending;
 
   return (
     <div className="container mx-auto p-6">
-      <Card className="min-h-[500px]">
+      <Card>
         <CardContent className="pt-6">
-          {currentAccount ? (
-            counterId ? (
-              <div className="space-y-4">
-                {/* Back button when viewing a counter */}
-                <div className="flex justify-between items-center">
-                  <Button 
-                    onClick={goBackToSelection}
-                    variant="outline"
-                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
-                  >
-                    ← Back to Counter Selection
-                  </Button>
-                  <div className="text-sm text-gray-500">
-                    Counter ID: {counterId.slice(0, 8)}...{counterId.slice(-8)}
-                  </div>
-                </div>
-                
-                {/* Counter component */}
-                <Counter id={counterId} />
+          {account ? (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold">Sui Voting Dapp</h1>
+                {zkLoginAccount && <Button onClick={handleLogout}>Logout</Button>}
               </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Navigation with proper styling */}
-                <div className="flex justify-center space-x-4">
-                  <Button
-                    variant={view === 'create' ? 'primary' : 'outline'}
-                    onClick={() => setView('create')}
-                    className={view === 'create' 
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }
-                  >
-                    Create New Counter
-                  </Button>
-                  <Button
-                    variant={view === 'search' ? 'primary' : 'outline'}
-                    onClick={() => setView('search')}
-                    className={view === 'search' 
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }
-                  >
-                    Find Existing Counter
-                  </Button>
-                </div>
-
-                {/* Content based on view */}
-                {view === 'create' && (
-                  <CreateCounter onCreated={handleCounterCreated} />
-                )}
-                
-                {view === 'search' && (
-                  <CounterList onSelectCounter={handleCounterSelected} />
-                )}
+              
+              <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
+                // In a real app, you would refetch the list of polls here
+                console.log("Poll created, refetching polls would happen here.");
+              }} />
+              <div className="mt-8">
+                <Polls
+                  execute={execute}
+                  isPending={isPending}
+                  walletAddress={account?.address}
+                  zkLoginAccountAddress={zkLoginAccount?.address}
+                />
               </div>
-            )
+            </div>
           ) : (
             <div className="text-center py-12">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Counter App</h2>
-              <p className="text-gray-600">Please connect your wallet to get started</p>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Welcome to the Sui Voting Dapp
+              </h2>
+              <p className="text-gray-600">
+                Please connect your wallet or{" "}
+                <Link href="/zklogin" className="text-blue-500 underline">
+                  log in with zkLogin
+                </Link>
+                {" "}to participate.
+              </p>
             </div>
           )}
         </CardContent>
