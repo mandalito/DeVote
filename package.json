@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mysten/bcs": "^1.8.0",
     "@mysten/dapp-kit": "^0.18.0",
     "@mysten/sui": "^1.38.0",
     "@mysten/sui.js": "^0.54.1",
