@@ -498,7 +498,7 @@ export default function ZkLoginComponent()
                         )}
 
                         <div className="pt-4 border-t">
-                            <Button onClick={clearState} variant="destructive" className="w-full">
+                            <Button onClick={clearState} variant="outline" className="w-full border-red-500 text-red-500 hover:bg-red-50">
                                 🧨 Clear State
                             </Button>
                         </div>
