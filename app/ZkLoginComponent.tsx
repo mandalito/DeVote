@@ -25,8 +25,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 import config from "../config.json"; 
 
-const NETWORK: NetworkName = "devnet";
-const MAX_EPOCH = 2; // keep ephemeral keys active for this many Sui epochs from now (1 epoch ~= 24h)
+const NETWORK: NetworkName = "testnet";
+const MAX_EPOCH = 30; // keep ephemeral keys active for this many Sui epochs from now (1 epoch ~= 24h, so ~30 days)
 
 const suiClient = new SuiClient({
     url: getFullnodeUrl(NETWORK),
@@ -39,7 +39,7 @@ const accountDataKey = "zklogin-demo.accounts";
 
 /* Types */
 
-type OpenIdProvider = "Google" | "Twitch" | "Facebook";
+type OpenIdProvider = "google" | "twitch" | "facebook";
 
 type SetupData = {
     provider: OpenIdProvider;
@@ -99,7 +99,7 @@ export default function ZkLoginComponent()
         };
         let loginUrl: string;
         switch (provider) {
-            case "Google": {
+            case "google": {
                 const urlParams = new URLSearchParams({
                     ...urlParamsBase,
                     client_id: config.CLIENT_ID_GOOGLE,
@@ -107,7 +107,7 @@ export default function ZkLoginComponent()
                 loginUrl = `https://accounts.google.com/o/oauth2/v2/auth?${urlParams.toString()}`;
                 break;
             }
-            case "Twitch": {
+            case "twitch": {
                 const urlParams = new URLSearchParams({
                     ...urlParamsBase,
                     client_id: config.CLIENT_ID_TWITCH,
@@ -115,7 +115,7 @@ export default function ZkLoginComponent()
                 loginUrl = `https://id.twitch.tv/oauth2/authorize?${urlParams.toString()}`;
                 break;
             }
-            case "Facebook": {
+            case "facebook": {
                 const urlParams = new URLSearchParams({
                     ...urlParamsBase,
                     client_id: config.CLIENT_ID_FACEBOOK,
@@ -353,8 +353,8 @@ export default function ZkLoginComponent()
     }
 
     const openIdProviders: OpenIdProvider[] = isLocalhost()
-        ? ["Google", "Twitch", "Facebook"]
-        : ["Google", "Twitch"];
+        ? ["google", "twitch", "facebook"]
+        : ["google", "twitch"];
         
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -383,7 +383,7 @@ export default function ZkLoginComponent()
                                         variant="outline"
                                         className="w-full"
                                     >
-                                        {provider}
+                                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
                                     </Button>
                                 ))}
                             </div>
@@ -399,7 +399,7 @@ export default function ZkLoginComponent()
                                         <div key={acct.userAddr} className="p-4 border rounded-lg space-y-2">
                                             <div>
                                                 <span className={`px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800`}>
-                                                    {acct.provider}
+                                                    {acct.provider.charAt(0).toUpperCase() + acct.provider.slice(1)}
                                                 </span>
                                             </div>
                                             <div>
