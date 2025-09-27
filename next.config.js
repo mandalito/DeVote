@@ -1,13 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {
-    rules: {
-      "*.svg": {
-        loaders: ["@svgr/webpack"],
-        as: "*.js",
-      },
-    },
-  },
+  // Server Actions are available by default in Next.js 14+
+  // No need for experimental.serverActions
 };
-
-export default nextConfig;
+module.exports = nextConfig;
