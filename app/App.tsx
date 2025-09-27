@@ -1,5 +1,8 @@
 'use client'
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { SuiClientProvider, WalletProvider, useCurrentAccount } from "@mysten/dapp-kit";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "@mysten/dapp-kit/dist/index.css";
+import { networkConfig } from "./networkConfig";
 import { isValidSuiObjectId } from "@mysten/sui/utils";
 import { useState, useEffect } from "react";
 import { Counter } from "./Counter";
@@ -7,6 +10,20 @@ import { CreateCounter } from "./CreateCounter";
 import { CounterList } from "./components/CounterList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+const queryClient = new QueryClient();
+
+function AppWithProviders() {
+  return(
+    <QueryClientProvider client={queryClient}>
+      <SuiClientProvider networks={networkConfig}>
+        <WalletProvider>
+          <App />
+        </WalletProvider>
+      </SuiClientProvider>
+    </QueryClientProvider>
+  )
+}
 
 function App() {
   const currentAccount = useCurrentAccount();
@@ -68,7 +85,7 @@ function App() {
                 {/* Navigation with proper styling */}
                 <div className="flex justify-center space-x-4">
                   <Button
-                    variant={view === 'create' ? 'default' : 'outline'}
+                    variant={view === 'create' ? 'primary' : 'outline'}
                     onClick={() => setView('create')}
                     className={view === 'create' 
                       ? 'bg-blue-600 hover:bg-blue-700 text-white' 
@@ -78,7 +95,7 @@ function App() {
                     Create New Counter
                   </Button>
                   <Button
-                    variant={view === 'search' ? 'default' : 'outline'}
+                    variant={view === 'search' ? 'primary' : 'outline'}
                     onClick={() => setView('search')}
                     className={view === 'search' 
                       ? 'bg-blue-600 hover:bg-blue-700 text-white' 
@@ -111,4 +128,4 @@ function App() {
   );
 }
 
-export default App;
+export default AppWithProviders;
