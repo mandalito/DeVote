@@ -1,4 +1,4 @@
-import { CreatePollForm, RegisterTeamForm } from '@/components/AdminForms';
+import { CreatePollForm } from '@/components/AdminForms';
 
 export default function AdminPage() {
   return (
@@ -6,7 +6,6 @@ export default function AdminPage() {
       <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
       <div className="grid md:grid-cols-2 gap-6">
         <CreatePollForm />
-        <RegisterTeamForm />
       </div>
       <p className="text-xs text-zinc-500">
         Note: This frontend assumes your backend enforces AdminCap/RegistrarCap checks and exposes

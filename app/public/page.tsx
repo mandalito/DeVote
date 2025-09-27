@@ -14,6 +14,7 @@ export default function HomePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">DeVote</h1>
       </div>
+
       {user?.loggedIn ? (
         <>
           <Link href="/team/register" className="w-fit">
