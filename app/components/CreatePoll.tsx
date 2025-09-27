@@ -27,8 +27,8 @@ export function CreatePoll({
     isPending: boolean;
     onCreated: (id: string) => void;
 }) {
-    const [name, setName] = useState("Dummy Poll: Best System Object?");
-    const [description, setDescription] = useState("A poll to decide the best system object.");
+    const [name, setName] = useState("Team-Based Poll: Best Project?");
+    const [description, setDescription] = useState("A group-based poll where teams vote for the best project.");
     const [choices, setChoices] = useState(`${DUMMY_CHOICE_1}, ${DUMMY_CHOICE_2}`);
     
     // Initialize deadline to 24 hours from now in datetime-local format
@@ -37,6 +37,11 @@ export function CreatePoll({
         return tomorrow.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:MM
     };
     const [deadlineDate, setDeadlineDate] = useState(getDefaultDeadline());
+    
+    // Group-based voting options
+    const [enableGroups, setEnableGroups] = useState(true);
+    const [maxGroups, setMaxGroups] = useState(3);
+    const [participantsPerGroup, setParticipantsPerGroup] = useState(4);
     const votingPackageId = useNetworkVariable("votingPackageId");
     const pollRegistryId = useNetworkVariable("pollRegistryId");
     const allNetworkVars = useNetworkVariables();
@@ -67,18 +72,35 @@ export function CreatePoll({
         console.log("- Frontend devnet RPC URL:", getFullnodeUrl('devnet'));
         console.log("- CLI devnet RPC URL: https://fullnode.devnet.sui.io:443");
 
-        tx.moveCall({
-            target: `${votingPackageId}::voting::create_simple_poll`,
-            arguments: [
-                tx.object(pollRegistryId),       // PollRegistry
-                tx.pure.string(name),            // String
-                tx.pure.string(description), 
-                //tx.pure.vector('id', [ choiceIds[0]]),    // String
-               tx.pure.id(choiceIds[0]),         // ID (choice1)
-               tx.pure.id(choiceIds[1] || choiceIds[0]), // ID (choice2, fallback to choice1 if only one)
-                tx.pure.u64(String(deadlineTimestamp)),   // u64 - Unix timestamp in milliseconds
-            ],
-        });
+        if (enableGroups) {
+            // Create group-based poll
+            tx.moveCall({
+                target: `${votingPackageId}::voting::create_group_poll`,
+                arguments: [
+                    tx.object(pollRegistryId),       // PollRegistry
+                    tx.pure.string(name),            // String
+                    tx.pure.string(description),     // String
+                    tx.pure.id(choiceIds[0]),        // ID (choice1)
+                    tx.pure.id(choiceIds[1] || choiceIds[0]), // ID (choice2)
+                    tx.pure.u64(String(deadlineTimestamp)),   // u64 - Unix timestamp
+                    tx.pure.u64(String(maxGroups)),           // u64 - Max groups
+                    tx.pure.u64(String(participantsPerGroup)), // u64 - Participants per group
+                ],
+            });
+        } else {
+            // Create simple poll
+            tx.moveCall({
+                target: `${votingPackageId}::voting::create_simple_poll`,
+                arguments: [
+                    tx.object(pollRegistryId),       // PollRegistry
+                    tx.pure.string(name),            // String
+                    tx.pure.string(description),     // String
+                    tx.pure.id(choiceIds[0]),        // ID (choice1)
+                    tx.pure.id(choiceIds[1] || choiceIds[0]), // ID (choice2)
+                    tx.pure.u64(String(deadlineTimestamp)),   // u64 - Unix timestamp
+                ],
+            });
+        }
 
         /*
        const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
@@ -181,8 +203,55 @@ export function CreatePoll({
                             ({new Date(deadlineDate).getTime()}ms)
                         </p>
                     </div>
+
+                    {/* Group Configuration */}
+                    <div className="space-y-4 border-t pt-4">
+                        <div className="flex items-center space-x-2">
+                            <input 
+                                type="checkbox" 
+                                id="enableGroups" 
+                                checked={enableGroups}
+                                onChange={(e) => setEnableGroups(e.target.checked)}
+                                className="rounded"
+                            />
+                            <Label htmlFor="enableGroups">Enable Group-Based Voting</Label>
+                        </div>
+                        
+                        {enableGroups && (
+                            <div className="space-y-3 ml-6 p-3 bg-gray-50 rounded-lg">
+                                <div className="space-y-2">
+                                    <Label htmlFor="maxGroups">Number of Groups</Label>
+                                    <Input 
+                                        id="maxGroups" 
+                                        type="number" 
+                                        min="2" 
+                                        max="10"
+                                        value={maxGroups} 
+                                        onChange={(e) => setMaxGroups(parseInt(e.target.value) || 2)} 
+                                        placeholder="e.g., 3" 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="participantsPerGroup">Participants per Group</Label>
+                                    <Input 
+                                        id="participantsPerGroup" 
+                                        type="number" 
+                                        min="2" 
+                                        max="20"
+                                        value={participantsPerGroup} 
+                                        onChange={(e) => setParticipantsPerGroup(parseInt(e.target.value) || 2)} 
+                                        placeholder="e.g., 4" 
+                                    />
+                                </div>
+                                <div className="text-xs text-gray-600">
+                                    Total capacity: {maxGroups} groups × {participantsPerGroup} participants = {maxGroups * participantsPerGroup} users
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <Button onClick={create} className="w-full" disabled={isPending}>
-                        {isPending ? "Creating..." : "Create Poll"}
+                        {isPending ? "Creating..." : (enableGroups ? "Create Group Poll" : "Create Simple Poll")}
                     </Button>
                 </div>
             </CardContent>

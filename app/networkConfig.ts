@@ -24,9 +24,9 @@ export const networkConfig = {
   devnet: {
     url: getFullnodeUrl('devnet'),
     variables: {
-      votingPackageId: '0x71fdb31cdb9a251cbf6bab4659f0c137941552d4dc2b88404b122abbad943a90', // New package with PollRegistry
-      votingRegistryId: '0x1ac79079e3607356b1b8ef6b2da3f75a4983e9969b5ed4e3fba3578e82f5f89b', // Team voting registry
-      pollRegistryId: '0xc7f4811cd5a64e3429db53ba6e7a15d05ecdda2c1e00705aaec32e7223791d8e', // New poll registry
+      votingPackageId: '0x7fb658596502c14b013c91880e75c477234072c5f95ecfa1fed89dbb83452127', // Package with group helper functions
+      votingRegistryId: '0x3acee036facf30c962ae2e3516f543a37613071d6e2528fc0331ce39c19af87e', // Team voting registry
+      pollRegistryId: '0x7bb2df4bbe5d04165691d615cb90e2eb822614db33724c2c8a3adec1940b58f9', // Poll registry with group support
     }
   },
 };

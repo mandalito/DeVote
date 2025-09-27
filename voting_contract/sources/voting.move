@@ -1,5 +1,6 @@
 #[allow(duplicate_alias)]
 module voting::voting {
+    use std::option::{Self, Option};
     use std::string::String;
     use std::vector;
 
@@ -21,6 +22,13 @@ module voting::voting {
     const E_REGISTER_SIZE: u64 = 8;
     const E_PROJECT_ALREADY_SET: u64 = 9;
     const E_NOT_AUTHORIZED: u64 = 10;
+    // Group-related errors
+    const E_GROUPS_NOT_ENABLED: u64 = 11;
+    const E_GROUP_FULL: u64 = 12;
+    const E_ALREADY_IN_GROUP: u64 = 13;
+    const E_GROUP_NOT_FULL: u64 = 14;
+    const E_VOTE_OWN_GROUP: u64 = 15;
+    const E_INVALID_GROUP: u64 = 16;
 
     // --- Objects & Structs ---
     public struct AdminCap has key {
@@ -65,6 +73,19 @@ module voting::voting {
         deadline_ms: u64,
         finalized: bool,
         tally: Table<ID, u64>,
+        // Group-based voting fields
+        groups_enabled: bool,
+        max_groups: u64,
+        participants_per_group: u64,
+        groups: Table<u64, Group>, // group_id -> Group
+        user_to_group: Table<address, u64>, // user -> group_id
+    }
+
+    // New: Group structure for team-based voting
+    public struct Group has store {
+        id: u64,
+        members: vector<address>,
+        is_full: bool,
     }
 
     // --- Events ---
@@ -84,6 +105,23 @@ module voting::voting {
     public struct Finalized has copy, drop, store {
         poll: ID,
         at_ms: u64,
+    }
+
+    // New: Group-related events
+    public struct GroupJoined has copy, drop, store {
+        poll: ID,
+        user: address,
+        group_id: u64,
+        group_size: u64,
+        is_full: bool,
+    }
+
+    public struct GroupVoteCast has copy, drop, store {
+        poll: ID,
+        voter: address,
+        voter_group: u64,
+        target_choice: ID,
+        new_tally: u64,
     }
 
     // --- Functions ---
@@ -170,6 +208,12 @@ module voting::voting {
             deadline_ms,
             finalized: false,
             tally,
+            // No groups for simple polls
+            groups_enabled: false,
+            max_groups: 0,
+            participants_per_group: 0,
+            groups: sui::table::new(ctx),
+            user_to_group: sui::table::new(ctx),
         };
         
         let poll_id = sui::object::id(&poll);
@@ -210,6 +254,60 @@ module voting::voting {
             deadline_ms,
             finalized: false,
             tally,
+            // No groups for simple polls
+            groups_enabled: false,
+            max_groups: 0,
+            participants_per_group: 0,
+            groups: sui::table::new(ctx),
+            user_to_group: sui::table::new(ctx),
+        };
+        
+        let poll_id = sui::object::id(&poll);
+        
+        // Register the poll in the global registry
+        vector::push_back(&mut poll_registry.polls, poll_id);
+        
+        transfer::share_object(poll);
+
+        // Create a new AdminCap for this poll's creator
+        let poll_admin = AdminCap { id: sui::object::new(ctx) };
+        transfer::transfer(poll_admin, sui::tx_context::sender(ctx));
+    }
+
+    // Create a poll with group-based voting
+    public entry fun create_group_poll(
+        poll_registry: &mut PollRegistry,
+        name: String,
+        description: String,
+        choice1: ID,
+        choice2: ID,
+        deadline_ms: u64,
+        max_groups: u64,
+        participants_per_group: u64,
+        ctx: &mut TxContext
+    ) {
+        let mut choices = vector::empty<ID>();
+        vector::push_back(&mut choices, choice1);
+        vector::push_back(&mut choices, choice2);
+
+        let mut tally = sui::table::new(ctx);
+        sui::table::add(&mut tally, choice1, 0);
+        sui::table::add(&mut tally, choice2, 0);
+
+        let poll = Poll {
+            id: sui::object::new(ctx),
+            name,
+            description,
+            choices,
+            deadline_ms,
+            finalized: false,
+            tally,
+            // Group-based voting setup
+            groups_enabled: true,
+            max_groups,
+            participants_per_group,
+            groups: sui::table::new(ctx),
+            user_to_group: sui::table::new(ctx),
         };
         
         let poll_id = sui::object::id(&poll);
@@ -232,6 +330,101 @@ module voting::voting {
     // Get the number of polls in the registry
     public fun get_poll_count(poll_registry: &PollRegistry): u64 {
         vector::length(&poll_registry.polls)
+    }
+
+    // Join a group in a poll
+    public entry fun join_group(
+        poll: &mut Poll,
+        group_id: u64,
+        ctx: &mut TxContext
+    ) {
+        assert!(poll.groups_enabled, E_GROUPS_NOT_ENABLED);
+        assert!(!poll.finalized, E_FINALIZED);
+        
+        let user = sui::tx_context::sender(ctx);
+        
+        // Check if user is already in a group
+        assert!(!sui::table::contains(&poll.user_to_group, user), E_ALREADY_IN_GROUP);
+        
+        // Check if group_id is valid
+        assert!(group_id < poll.max_groups, E_INVALID_GROUP);
+        
+        // Create group if it doesn't exist
+        if (!sui::table::contains(&poll.groups, group_id)) {
+            let new_group = Group {
+                id: group_id,
+                members: vector::empty<address>(),
+                is_full: false,
+            };
+            sui::table::add(&mut poll.groups, group_id, new_group);
+        };
+        
+        let group = sui::table::borrow_mut(&mut poll.groups, group_id);
+        
+        // Check if group is full
+        assert!(!group.is_full, E_GROUP_FULL);
+        
+        // Add user to group
+        vector::push_back(&mut group.members, user);
+        
+        // Check if group is now full
+        let group_size = vector::length(&group.members);
+        let is_full = group_size == poll.participants_per_group;
+        if (is_full) {
+            group.is_full = true;
+        };
+        
+        // Add user to poll's user mapping (after we're done with group)
+        sui::table::add(&mut poll.user_to_group, user, group_id);
+        
+        // Emit event
+        let poll_id = sui::object::id(poll);
+        event::emit(GroupJoined {
+            poll: poll_id,
+            user,
+            group_id,
+            group_size,
+            is_full,
+        });
+    }
+
+    // Vote for a choice as a group member
+    public entry fun group_vote(
+        poll: &mut Poll,
+        choice_id: ID,
+        ctx: &mut TxContext
+    ) {
+        assert!(poll.groups_enabled, E_GROUPS_NOT_ENABLED);
+        assert!(!poll.finalized, E_FINALIZED);
+        
+        let user = sui::tx_context::sender(ctx);
+        
+        // Check if user is in a group
+        assert!(sui::table::contains(&poll.user_to_group, user), E_NOT_MEMBER);
+        
+        let user_group_id = *sui::table::borrow(&poll.user_to_group, user);
+        let group = sui::table::borrow(&poll.groups, user_group_id);
+        
+        // Check if group is full (can vote)
+        assert!(group.is_full, E_GROUP_NOT_FULL);
+        
+        // Check if choice is valid
+        assert!(vector::contains(&poll.choices, &choice_id), E_BAD_CHOICE);
+        
+        // Update tally
+        let current_tally = *sui::table::borrow(&poll.tally, choice_id);
+        let new_tally = current_tally + 1;
+        *sui::table::borrow_mut(&mut poll.tally, choice_id) = new_tally;
+        
+        // Emit event
+        let poll_id = sui::object::id(poll);
+        event::emit(GroupVoteCast {
+            poll: poll_id,
+            voter: user,
+            voter_group: user_group_id,
+            target_choice: choice_id,
+            new_tally,
+        });
     }
 
     public fun register_team(
@@ -342,6 +535,38 @@ module voting::voting {
             *r = *r + 1;
         } else {
             sui::table::add(t, key, 1);
+        }
+    }
+
+    // Get group members (returns up to first 10 members for display)
+    public fun get_group_members(poll: &Poll, group_id: u64): vector<address> {
+        if (sui::table::contains(&poll.groups, group_id)) {
+            let group = sui::table::borrow(&poll.groups, group_id);
+            // Return first 10 members to avoid gas issues
+            let members = &group.members;
+            let len = vector::length(members);
+            if (len <= 10) {
+                *members
+            } else {
+                let mut result = vector::empty<address>();
+                let mut i = 0;
+                while (i < 10) {
+                    vector::push_back(&mut result, *vector::borrow(members, i));
+                    i = i + 1;
+                };
+                result
+            }
+        } else {
+            vector::empty<address>()
+        }
+    }
+
+    // Get user's group ID in a poll
+    public fun get_user_group_id(poll: &Poll, user: address): u64 {
+        if (sui::table::contains(&poll.user_to_group, user)) {
+            *sui::table::borrow(&poll.user_to_group, user)
+        } else {
+            999 // Return 999 if user not in any group
         }
     }
 }
