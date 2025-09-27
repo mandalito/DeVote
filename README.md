@@ -4,7 +4,7 @@
 
 ---
 
-## 0) TL;DR
+##  TL;DR
 
 - **Idea:** Simple, fair, privacy-preserving voting for hackathons/contests. Users log in with OAuth (Google/Apple/etc.) via **zkLogin**—no seed phrases.
 - **Goal:** Guarantee **one human → one vote**, prevent **self-voting**, and keep choices private while keeping tallies verifiable on-chain.
@@ -411,35 +411,4 @@ If you run a tiny backend for allowlists / nonces:
 
 ---
 
-## 24) License
 
-MIT (or your preference). Add `LICENSE` file accordingly.
-
----
-
-## 25) Acknowledgements
-
-- Mysten Labs / Sui for zkLogin and dapp-kit primitives.
-- Community tooling for Move, event indexing, and examples.
-
----
-
-### Appendix A — Error Cheatsheet
-
-- **“Invalid type: Expected Object but received Array”**  
-  Use `tx.makeMoveVec(...)` to construct Move vectors; don’t pass raw JS arrays.
-
-- **“init functions must be internal to their module”**  
-  Keep `fun init` non-entry and called implicitly by Sui during publish; don’t mark it `public entry`.
-
-- **“E_SELF_VOTE” / “E_ALREADY_VOTED”**  
-  Hit validation: member linked to team cannot vote that team; or nullifier already used.
-
----
-
-### Fill-in checklist
-- [ ] Replace `<YOUR_PACKAGE_ID>` and `<YOUR_REGISTRY_OBJECT_ID>` in `.env.local`.
-- [ ] Put your OAuth **Client ID** and provider in `.env.local`.
-- [ ] Configure **server-side** `ZK_SALT_HEX` and never expose it to the browser.
-- [ ] Verify `voting.move` exports match the function names referenced in the frontend.
-- [ ] Run localnet e2e once before testnet/mainnet deploy.
