@@ -4,7 +4,7 @@
 import axios from "axios";
 import { fromB64 } from "@mysten/bcs";
 import { SuiClient } from "@mysten/sui/client";
-import { SerializedSignature } from "@mysten/sui/cryptography";
+import { toSerializedSignature } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
 import { MIST_PER_SUI } from "@mysten/sui/utils";
@@ -67,7 +67,7 @@ export class ZkLogin {
     const kp = Ed25519Keypair.generate();
     sessionStorage.setItem(
       KEY_PAIR_SESSION_STORAGE_KEY,
-      kp.export().privateKey
+      kp.getSecretKey()
     );
     this.state.ephemeralKeyPair = kp;
     return kp;
@@ -192,7 +192,7 @@ export class ZkLogin {
   /** -------- Build & execute zkLogin transaction -------- */
   async executeSimpleTransfer(
     to: string,
-    amountSui = 1n
+    amountSui = BigInt(1)
   ): Promise<{ digest: string }> {
     const { ephemeralKeyPair, partialProof, decoded, userSalt, maxEpoch, zkAddress } = this.state;
     if (!ephemeralKeyPair || !partialProof || !decoded || !userSalt || !maxEpoch || !zkAddress) {
@@ -217,7 +217,7 @@ export class ZkLogin {
       decoded.aud as string
     ).toString();
 
-    const zkLoginSignature: SerializedSignature = getZkLoginSignature({
+    const zkLoginSignature = getZkLoginSignature({
       inputs: { ...partialProof, addressSeed },
       maxEpoch,
       userSignature,
