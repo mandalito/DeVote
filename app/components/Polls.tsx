@@ -216,9 +216,27 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     
                                     if (userGroupResult.results?.[0]?.returnValues?.[0]) {
                                         const returnValue = userGroupResult.results[0].returnValues[0];
-                                        const userGroupId = Array.isArray(returnValue[0]) ? returnValue[0][0] : parseInt(returnValue[0]);
-                                        if (userGroupId !== 999) { // 999 means not in any group
+                                        console.log(`Poll ${pollId} - User group raw result:`, returnValue);
+                                        
+                                        // Parse u64 from BCS - it's encoded as 8 bytes
+                                        let userGroupId = 999; // Default to "not in any group"
+                                        
+                                        if (Array.isArray(returnValue[0]) && returnValue[0].length === 8) {
+                                            // BCS u64 is little-endian 8 bytes
+                                            const bytes = returnValue[0];
+                                            userGroupId = 0;
+                                            for (let i = 0; i < 8; i++) {
+                                                userGroupId += bytes[i] * Math.pow(256, i);
+                                            }
+                                        }
+                                        
+                                        console.log(`Poll ${pollId} - User group ID:`, userGroupId);
+                                        if (userGroupId !== 999 && userGroupId < parseInt(fields.max_groups || '0')) { 
+                                            // Only accept valid group IDs within the poll's range
                                             userToGroupData[zkLoginAccountAddress] = userGroupId.toString();
+                                            console.log(`Poll ${pollId} - User ${zkLoginAccountAddress} is in group:`, userGroupId);
+                                        } else {
+                                            console.log(`Poll ${pollId} - User ${zkLoginAccountAddress} is not in any group (ID: ${userGroupId})`);
                                         }
                                     }
                                     
@@ -313,6 +331,13 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     user_to_group: userToGroupData,
                                     group_tally: fields.group_tally?.fields || {},
                                 };
+                                
+                                console.log(`Poll ${pollId} - Final poll data:`, {
+                                    poll_type: poll.poll_type,
+                                    user_to_group: poll.user_to_group,
+                                    groups_count: Object.keys(poll.groups).length,
+                                    user_address: zkLoginAccountAddress
+                                });
                             pollsData.push(poll);
                             
                             // Collect all project IDs for fetching (only for static polls)
@@ -621,6 +646,18 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             const isFull = group?.is_full || false;
                                             const userInThisGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] === groupId;
                                             const userInAnyGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] !== undefined;
+                                            
+                                            // Debug logging for this specific group
+                                            if (i === 0) { // Only log for first group to avoid spam
+                                                console.log(`Poll ${poll.id} - Group UI Debug:`, {
+                                                    userAddress: zkLoginAccountAddress,
+                                                    userToGroup: poll.user_to_group,
+                                                    userInThisGroup,
+                                                    userInAnyGroup,
+                                                    groupId,
+                                                    pollType: poll.poll_type
+                                                });
+                                            }
                                             const groupExists = group !== undefined;
                                             const groupName = group?.name || '';
                                             const groupDescription = group?.description || '';
