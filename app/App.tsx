@@ -87,11 +87,17 @@ function App() {
                 )}
               </div>
               
-              <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
-                // Refresh polls list when a new poll is created
-                setPollsRefreshTrigger(prev => prev + 1);
-                console.log("Poll created, refreshing polls list...");
-              }} />
+              <div className="flex gap-4">
+                <CreatePoll execute={execute} isPending={isPending} onCreated={() => {
+                  // Refresh polls list when a new poll is created
+                  setPollsRefreshTrigger(prev => prev + 1);
+                  console.log("Poll created, refreshing polls list...");
+                }} />
+                <Link href="/team/register" passHref>
+                  <Button>Team Registration</Button>
+                </Link>
+              </div>
+
               <div className="mt-8">
                 <Polls
                   execute={execute}
