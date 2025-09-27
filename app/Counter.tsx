@@ -14,7 +14,7 @@ import { useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
 
 export function Counter({ id }: { id: string }) {
-  const counterPackageId = useNetworkVariable("counterPackageId");
+  const counterPackageId = useNetworkVariable("votingPackageId");
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();

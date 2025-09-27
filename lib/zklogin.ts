@@ -6,7 +6,7 @@ import { fromB64 } from "@mysten/bcs";
 import { SuiClient } from "@mysten/sui/client";
 import { SerializedSignature } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { TransactionBlock } from "@mysten/sui/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import { MIST_PER_SUI } from "@mysten/sui/utils";
 import {
   genAddressSeed,
@@ -200,7 +200,7 @@ export class ZkLogin {
     }
     if (!decoded.sub || !decoded.aud) throw new Error("JWT missing sub or aud");
 
-    const txb = new TransactionBlock();
+    const txb = new Transaction();
     const [coin] = txb.splitCoins(txb.gas, [MIST_PER_SUI * amountSui]);
     txb.transferObjects([coin], to);
     txb.setSender(zkAddress);

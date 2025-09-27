@@ -17,7 +17,7 @@ export function CreateCounter({
   ) => void;
   isPending: boolean;
 }) {
-  const counterPackageId = useNetworkVariable("counterPackageId");
+  const counterPackageId = useNetworkVariable("votingPackageId");
   const suiClient = useSuiClient();
 
   function create() {
