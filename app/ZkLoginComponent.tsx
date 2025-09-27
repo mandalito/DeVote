@@ -413,7 +413,7 @@ export default function ZkLoginComponent()
         setBalances(new Map());
     }
 
-    const openIdProviders: OpenIdProvider[] = isLocalhost()
+    const openIdProviders: OpenIdProvider[] = (typeof window !== 'undefined' && isLocalhost())
         ? ["google", "twitch", "facebook"]
         : ["google", "twitch"];
         
