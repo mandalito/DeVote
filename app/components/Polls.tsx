@@ -7,6 +7,90 @@ import { useSuiClient } from '@mysten/dapp-kit';
 import { useState, useEffect } from 'react';
 import { bcs } from '@mysten/sui/bcs';
 
+// Simple dialog component for group naming
+function GroupNameDialog({ 
+    isOpen, 
+    onClose, 
+    onConfirm, 
+    pollType 
+}: { 
+    isOpen: boolean; 
+    onClose: () => void; 
+    onConfirm: (name: string, description: string) => void;
+    pollType: string;
+}) {
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (name.trim()) {
+            onConfirm(name.trim(), description.trim());
+            setName('');
+            setDescription('');
+            onClose();
+        }
+    };
+
+    if (!isOpen) return null;
+
+    const isIndividual = pollType === 'individual';
+    const title = isIndividual ? 'Introduce Yourself' : 'Name Your Group';
+    const nameLabel = isIndividual ? 'Your Name/Title' : 'Group Name';
+    const namePlaceholder = isIndividual ? 'e.g., John Smith - AI Researcher' : 'e.g., Team Alpha';
+    const descLabel = isIndividual ? 'Your Background' : 'Group Description';
+    const descPlaceholder = isIndividual ? 'Brief description of your work/expertise...' : 'What makes your team special...';
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900">{title}</h3>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {nameLabel}
+                        </label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder={namePlaceholder}
+                            className="w-full p-2 border border-gray-300 rounded-md text-gray-900"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {descLabel}
+                        </label>
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder={descPlaceholder}
+                            className="w-full p-2 border border-gray-300 rounded-md text-gray-900 h-20 resize-none"
+                        />
+                    </div>
+                    <div className="flex space-x-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                        >
+                            {isIndividual ? 'Join as Individual' : 'Create Group'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 // Real poll fetching and display component
 
 
@@ -14,22 +98,27 @@ type Poll = {
     id: string;
     name: string;
     description: string;
-    choices: string[]; // Array of project IDs
+    choices: string[]; // Array of project IDs (empty for dynamic polls)
     deadline_ms: string;
     finalized: boolean;
-    tally: { [projectId: string]: string }; // Vote counts as strings
+    tally: { [projectId: string]: string }; // Vote counts as strings (for static polls)
     // Group-based voting fields
     groups_enabled: boolean;
+    poll_type: string; // "individual", "group", or "simple"
     max_groups: string;
     participants_per_group: string;
     groups: { [groupId: string]: Group };
     user_to_group: { [userAddress: string]: string };
+    group_tally: { [groupId: string]: string }; // Vote counts for dynamic polls
 };
 
 type Group = {
     id: string;
+    name: string;
+    description: string;
     members: string[];
     is_full: boolean;
+    creator: string;
 };
 
 type Project = {
@@ -55,6 +144,8 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
     const [polls, setPolls] = useState<Poll[]>([]);
     const [projects, setProjects] = useState<{ [id: string]: Project }>({});
     const [loading, setLoading] = useState(true);
+    const [showGroupDialog, setShowGroupDialog] = useState(false);
+    const [selectedPoll, setSelectedPoll] = useState<{ pollId: string; groupId: number; pollType: string } | null>(null);
 
     // Fetch all polls and their associated projects
     useEffect(() => {
@@ -124,7 +215,8 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     });
                                     
                                     if (userGroupResult.results?.[0]?.returnValues?.[0]) {
-                                        const userGroupId = parseInt(userGroupResult.results[0].returnValues[0][0]);
+                                        const returnValue = userGroupResult.results[0].returnValues[0];
+                                        const userGroupId = Array.isArray(returnValue[0]) ? returnValue[0][0] : parseInt(returnValue[0]);
                                         if (userGroupId !== 999) { // 999 means not in any group
                                             userToGroupData[zkLoginAccountAddress] = userGroupId.toString();
                                         }
@@ -188,8 +280,11 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                 
                                                 groupsData[i.toString()] = {
                                                     id: i.toString(),
+                                                    name: '', // Will be set when someone joins
+                                                    description: '', // Will be set when someone joins
                                                     members: members,
-                                                    is_full: members.length >= parseInt(fields.participants_per_group || '0')
+                                                    is_full: members.length >= parseInt(fields.participants_per_group || '0'),
+                                                    creator: members.length > 0 ? members[0] : '',
                                                 };
                                             }
                                         } catch (error) {
@@ -201,27 +296,31 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                 }
                             }
                             
-                            const poll: Poll = {
-                                id: pollResponse.data.objectId,
-                                name: fields.name,
-                                description: fields.description,
-                                choices: fields.choices,
-                                deadline_ms: fields.deadline_ms,
-                                finalized: fields.finalized,
-                                tally: fields.tally?.fields || {},
-                                // Group-based voting fields with real data
-                                groups_enabled: fields.groups_enabled || false,
-                                max_groups: fields.max_groups || '0',
-                                participants_per_group: fields.participants_per_group || '0',
-                                groups: groupsData,
-                                user_to_group: userToGroupData,
-                            };
+                                const poll: Poll = {
+                                    id: pollResponse.data.objectId,
+                                    name: fields.name,
+                                    description: fields.description,
+                                    choices: fields.choices || [],
+                                    deadline_ms: fields.deadline_ms,
+                                    finalized: fields.finalized,
+                                    tally: fields.tally?.fields || {},
+                                    // Group-based voting fields with real data
+                                    groups_enabled: fields.groups_enabled || false,
+                                    poll_type: fields.poll_type || 'simple',
+                                    max_groups: fields.max_groups || '0',
+                                    participants_per_group: fields.participants_per_group || '0',
+                                    groups: groupsData,
+                                    user_to_group: userToGroupData,
+                                    group_tally: fields.group_tally?.fields || {},
+                                };
                             pollsData.push(poll);
                             
-                            // Collect all project IDs for fetching
-                            fields.choices.forEach((projectId: string) => {
-                                projectIds.add(projectId);
-                            });
+                            // Collect all project IDs for fetching (only for static polls)
+                            if (fields.choices && fields.choices.length > 0) {
+                                fields.choices.forEach((projectId: string) => {
+                                    projectIds.add(projectId);
+                                });
+                            }
                         }
                     } catch (error) {
                         console.warn(`Failed to fetch poll ${pollId}:`, error);
@@ -230,7 +329,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
 
                 // Fetch all Project objects
                 const projectsData: { [id: string]: Project } = {};
-                for (const projectId of projectIds) {
+                for (const projectId of Array.from(projectIds)) {
                     try {
                         const projectResponse = await suiClient.getObject({
                             id: projectId,
@@ -271,7 +370,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         fetchPolls();
     }, [suiClient, votingPackageId, pollRegistryId, refreshTrigger]); // Add pollRegistryId to dependencies
 
-    const handleJoinGroup = async (pollId: string, groupId: number) => {
+    const handleJoinGroup = async (pollId: string, groupId: number, groupName?: string, groupDescription?: string) => {
         if (!votingPackageId) {
             console.error("Package ID not found in network config");
             return;
@@ -279,18 +378,33 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
 
         const tx = new Transaction();
 
-        tx.moveCall({
-            target: `${votingPackageId}::voting::join_group`,
-            arguments: [
-                tx.object(pollId),
-                tx.pure.u64(String(groupId)),
-            ],
-        });
+        if (groupName && groupDescription) {
+            // Join with name (for new groups)
+            tx.moveCall({
+                target: `${votingPackageId}::voting::join_group_with_name`,
+                arguments: [
+                    tx.object(pollId),
+                    tx.pure.u64(String(groupId)),
+                    tx.pure.string(groupName),
+                    tx.pure.string(groupDescription),
+                ],
+            });
+        } else {
+            // Join existing group
+            tx.moveCall({
+                target: `${votingPackageId}::voting::join_group`,
+                arguments: [
+                    tx.object(pollId),
+                    tx.pure.u64(String(groupId)),
+                ],
+            });
+        }
 
         try {
             await execute(tx);
             console.log("Successfully joined group:", groupId);
-            alert(`Successfully joined Group ${groupId + 1}! The page will refresh to show updated group membership.`);
+            const groupDisplayName = groupName || `Group ${groupId + 1}`;
+            alert(`Successfully joined ${groupDisplayName}! The page will refresh to show updated group membership.`);
             // Refresh polls to show updated group membership
             setTimeout(() => {
                 window.location.reload();
@@ -302,6 +416,53 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
             } else {
                 alert("Failed to join group. See console for details.");
             }
+        }
+    };
+
+    const handleJoinGroupClick = (pollId: string, groupId: number, pollType: string, groupExists: boolean) => {
+        if (groupExists) {
+            // Join existing group directly
+            handleJoinGroup(pollId, groupId);
+        } else {
+            // Show dialog to name the group/individual
+            setSelectedPoll({ pollId, groupId, pollType });
+            setShowGroupDialog(true);
+        }
+    };
+
+    const handleGroupNameConfirm = (name: string, description: string) => {
+        if (selectedPoll) {
+            handleJoinGroup(selectedPoll.pollId, selectedPoll.groupId, name, description);
+        }
+        setSelectedPoll(null);
+    };
+
+    const handleVoteForGroup = async (pollId: string, targetGroupId: number) => {
+        if (!votingPackageId) {
+            console.error("Package ID not found in network config");
+            return;
+        }
+
+        const tx = new Transaction();
+
+        tx.moveCall({
+            target: `${votingPackageId}::voting::vote_for_group`,
+            arguments: [
+                tx.object(pollId),
+                tx.pure.u64(String(targetGroupId)),
+            ],
+        });
+
+        try {
+            await execute(tx);
+            console.log("Successfully voted for group:", targetGroupId);
+            alert(`Vote cast for Group ${targetGroupId + 1}! The page will refresh to show updated results.`);
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } catch (error) {
+            console.error("Failed to vote for group:", error);
+            alert("Failed to cast vote. See console for details.");
         }
     };
 
@@ -380,18 +541,28 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                 <div className="text-center py-8">
                     <p className="text-gray-500">No polls found. Create the first poll above!</p>
                 </div>
-                   ) : (
-                       polls.map((poll) => (
+            ) : (
+                polls.map((poll) => (
                 <Card key={poll.id}>
                     <CardHeader>
-                                   <CardTitle className="flex items-center gap-2">
-                                       {poll.name}
-                                       {poll.groups_enabled && (
-                                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                               Team-Based
-                                           </span>
-                                       )}
-                                   </CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            {poll.name}
+                            {poll.poll_type === 'individual' && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                    Individual
+                                </span>
+                            )}
+                            {poll.poll_type === 'group' && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    Team-Based
+                                </span>
+                            )}
+                            {poll.poll_type === 'simple' && (
+                                <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
+                                    Simple Poll
+                                </span>
+                            )}
+                        </CardTitle>
                         <CardDescription>{poll.description}</CardDescription>
                                    <div className="text-sm text-gray-500 space-y-1">
                                        <p>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</p>
@@ -402,39 +573,87 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                    </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                                   {poll.groups_enabled ? (
-                                       // Group-based poll UI
-                                       <div className="space-y-6">
-                                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                               <h4 className="font-semibold mb-2 text-blue-800">🏆 Team-Based Voting System</h4>
-                                               <div className="text-sm text-blue-700 space-y-1">
-                                                   <p>• <strong>Groups:</strong> {poll.max_groups} teams of {poll.participants_per_group} members each</p>
-                                                   <p>• <strong>Total Capacity:</strong> {parseInt(poll.max_groups) * parseInt(poll.participants_per_group)} participants</p>
-                                                   <p>• <strong>Voting:</strong> Teams must be full before they can vote</p>
-                                               </div>
-                                           </div>
+                        {poll.poll_type === 'individual' || poll.poll_type === 'group' ? (
+                            // Dynamic poll UI
+                            <div className="space-y-6">
+                                <div className={`border rounded-lg p-4 ${
+                                    poll.poll_type === 'individual' 
+                                        ? 'bg-green-50 border-green-200' 
+                                        : 'bg-blue-50 border-blue-200'
+                                }`}>
+                                    <h4 className={`font-semibold mb-2 ${
+                                        poll.poll_type === 'individual' 
+                                            ? 'text-green-800' 
+                                            : 'text-blue-800'
+                                    }`}>
+                                        {poll.poll_type === 'individual' ? '🙋‍♂️ Individual Competition' : '🏆 Team-Based Competition'}
+                                    </h4>
+                                    <div className={`text-sm space-y-1 ${
+                                        poll.poll_type === 'individual' 
+                                            ? 'text-green-700' 
+                                            : 'text-blue-700'
+                                    }`}>
+                                        {poll.poll_type === 'individual' ? (
+                                            <>
+                                                <p>• <strong>Participants:</strong> {poll.max_groups} individual slots</p>
+                                                <p>• <strong>Format:</strong> Each person represents themselves</p>
+                                                <p>• <strong>Voting:</strong> Vote for other participants (not yourself)</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p>• <strong>Groups:</strong> {poll.max_groups} teams of {poll.participants_per_group} members each</p>
+                                                <p>• <strong>Total Capacity:</strong> {parseInt(poll.max_groups) * parseInt(poll.participants_per_group)} participants</p>
+                                                <p>• <strong>Voting:</strong> Teams must be full before they can vote</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
 
-                                           <div>
-                                               <h4 className="font-semibold mb-3">Available Groups</h4>
-                                               <div className="grid gap-3">
-                                                   {Array.from({ length: parseInt(poll.max_groups) }, (_, i) => {
-                                                       const groupId = i.toString();
-                                                       const group = poll.groups[groupId];
-                                                       const members = group?.members || [];
-                                                       const isFull = group?.is_full || false;
-                                                       const userInThisGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] === groupId;
-                                                       const userInAnyGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] !== undefined;
-                                                       
-                                                       return (
-                                                           <div key={i} className="border rounded-lg p-3 bg-gray-50">
-                                                               <div className="flex justify-between items-center mb-2">
-                                                                   <h5 className="font-medium">Group {i + 1}</h5>
-                                                                   <span className={`text-xs px-2 py-1 rounded-full ${
-                                                                       isFull ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                                                   }`}>
-                                                                       {members.length}/{poll.participants_per_group} {isFull ? '✓ Ready' : 'Filling'}
-                                                                   </span>
-                                                               </div>
+                                <div>
+                                    <h4 className="font-semibold mb-3">
+                                        {poll.poll_type === 'individual' ? 'Participants' : 'Available Groups'}
+                                    </h4>
+                                    <div className="grid gap-3">
+                                        {Array.from({ length: parseInt(poll.max_groups) }, (_, i) => {
+                                            const groupId = i.toString();
+                                            const group = poll.groups[groupId];
+                                            const members = group?.members || [];
+                                            const isFull = group?.is_full || false;
+                                            const userInThisGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] === groupId;
+                                            const userInAnyGroup = zkLoginAccountAddress && poll.user_to_group[zkLoginAccountAddress] !== undefined;
+                                            const groupExists = group !== undefined;
+                                            const groupName = group?.name || '';
+                                            const groupDescription = group?.description || '';
+                                            const voteCount = poll.group_tally[groupId] || '0';
+                                            
+                                            // For individual polls, each "group" is one person
+                                            const isIndividual = poll.poll_type === 'individual';
+                                            const displayName = isIndividual 
+                                                ? (groupName || `Slot ${i + 1}`)
+                                                : (groupName || `Group ${i + 1}`);
+                                            
+                                            return (
+                                                <div key={i} className="border rounded-lg p-3 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <div>
+                                                            <h5 className="font-medium">{displayName}</h5>
+                                                            {groupDescription && (
+                                                                <p className="text-xs text-gray-600 mt-1">{groupDescription}</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-xs px-2 py-1 rounded-full ${
+                                                                isFull ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                                            }`}>
+                                                                {members.length}/{poll.participants_per_group} {isFull ? '✓ Ready' : 'Open'}
+                                                            </span>
+                                                            {voteCount !== '0' && (
+                                                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                                                    {voteCount} votes
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                                
                                                                <div className="space-y-2">
                                                    {members.length > 0 ? (
@@ -463,16 +682,50 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                        </div>
                                                                    )}
                                                                    
-                                                                   {!poll.finalized && !userInAnyGroup && !isFull && (
-                                                                       <Button
-                                                                           size="sm"
-                                                                           onClick={() => handleJoinGroup(poll.id, i)}
-                                                                           disabled={isPending}
-                                                                           className="w-full"
-                                                                       >
-                                                                           + Join Group {i + 1}
-                                                                       </Button>
-                                                                   )}
+                                                    {!poll.finalized && !userInAnyGroup && !isFull && (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleJoinGroupClick(poll.id, i, poll.poll_type, groupExists)}
+                                                            disabled={isPending}
+                                                            className="w-full"
+                                                        >
+                                                            {groupExists 
+                                                                ? `+ Join ${displayName}`
+                                                                : (isIndividual ? '+ Join as Individual' : '+ Create Group')
+                                                            }
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {/* Voting buttons for dynamic polls */}
+                                                    {!poll.finalized && userInAnyGroup && isFull && userInThisGroup && (
+                                                        <div className="space-y-2">
+                                                            <div className="text-xs text-blue-600 font-medium">
+                                                                Vote for other {isIndividual ? 'participants' : 'groups'}:
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-1">
+                                                                {Array.from({ length: parseInt(poll.max_groups) }, (_, voteIdx) => {
+                                                                    const targetGroup = poll.groups[voteIdx.toString()];
+                                                                    const canVoteFor = targetGroup && targetGroup.is_full && voteIdx !== i;
+                                                                    const targetName = targetGroup?.name || (isIndividual ? `Participant ${voteIdx + 1}` : `Group ${voteIdx + 1}`);
+                                                                    
+                                                                    if (!canVoteFor) return null;
+                                                                    
+                                                                    return (
+                                                                        <Button
+                                                                            key={voteIdx}
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => handleVoteForGroup(poll.id, voteIdx)}
+                                                                            disabled={isPending}
+                                                                            className="text-xs"
+                                                                        >
+                                                                            Vote {targetName}
+                                                                        </Button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                                    
                                                                    {userInAnyGroup && !userInThisGroup && (
                                                                        <div className="text-xs text-gray-500 italic">
@@ -542,8 +795,18 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                    )}
                     </CardContent>
                 </Card>
-                       ))
-                   )}
+                ))
+            )}
+            
+            <GroupNameDialog
+                isOpen={showGroupDialog}
+                onClose={() => {
+                    setShowGroupDialog(false);
+                    setSelectedPoll(null);
+                }}
+                onConfirm={handleGroupNameConfirm}
+                pollType={selectedPoll?.pollType || 'group'}
+            />
         </div>
     );
 }

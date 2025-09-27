@@ -9,12 +9,6 @@ import { Transaction } from "@mysten/sui/transactions";
 import { useNetworkVariable, useNetworkVariables } from "../networkConfig";
 import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
 
-// AdminCap is no longer needed - each poll creator gets their own AdminCap automatically
-
-// We'll use the Project objects we created as poll choices.
-const DUMMY_CHOICE_1 = "0x1acd97d251ba9b53d322e7e8d1b95d8ef746afcd06a47c54609a1ebf867d16cc"; // Project Alpha (devnet)
-const DUMMY_CHOICE_2 = "0x2f464feace37e030292265c426fa36001a72ed8ce842bdf1dd191210e58ac092"; // Project Beta (devnet)
-
 export function CreatePoll({
     execute,
     isPending,
@@ -27,9 +21,8 @@ export function CreatePoll({
     isPending: boolean;
     onCreated: (id: string) => void;
 }) {
-    const [name, setName] = useState("Team-Based Poll: Best Project?");
-    const [description, setDescription] = useState("A group-based poll where teams vote for the best project.");
-    const [choices, setChoices] = useState(`${DUMMY_CHOICE_1}, ${DUMMY_CHOICE_2}`);
+    const [name, setName] = useState("Dynamic Poll: Best Team/Individual");
+    const [description, setDescription] = useState("A dynamic poll where participants create their own groups or represent themselves individually.");
     
     // Initialize deadline to 24 hours from now in datetime-local format
     const getDefaultDeadline = () => {
@@ -38,27 +31,28 @@ export function CreatePoll({
     };
     const [deadlineDate, setDeadlineDate] = useState(getDefaultDeadline());
     
-    // Group-based voting options
-    const [enableGroups, setEnableGroups] = useState(true);
-    const [maxGroups, setMaxGroups] = useState(3);
-    const [participantsPerGroup, setParticipantsPerGroup] = useState(4);
+    // Poll type selection
+    const [pollType, setPollType] = useState<"individual" | "group">("individual");
+    const [maxGroups, setMaxGroups] = useState(10);
+    const [participantsPerGroup, setParticipantsPerGroup] = useState(1); // 1 for individual, more for groups
+    
     const votingPackageId = useNetworkVariable("votingPackageId");
     const pollRegistryId = useNetworkVariable("pollRegistryId");
     const allNetworkVars = useNetworkVariables();
 
     const create = () => {
         const tx = new Transaction();
-        //tx.setSender("0xc899b84f50e994b0b595c38919f0ca4e0b94f7758548e2494b1a6c9ddfdbfbfb");
-        const choiceIds = choices.split(",").map(s => s.trim()).filter(Boolean);
         
         // Convert datetime-local to Unix timestamp in milliseconds
         const deadlineTimestamp = new Date(deadlineDate).getTime();
 
-        console.log("Creating transaction with:");
+        console.log("Creating dynamic poll with:");
         console.log("- Package ID:", votingPackageId);
-        console.log("- Choice IDs:", choiceIds);
         console.log("- Name:", name);
         console.log("- Description:", description);
+        console.log("- Poll Type:", pollType);
+        console.log("- Max Groups:", maxGroups);
+        console.log("- Participants Per Group:", participantsPerGroup);
         console.log("- Deadline Date:", deadlineDate);
         console.log("- Deadline Unix Timestamp:", deadlineTimestamp);
         
@@ -66,60 +60,31 @@ export function CreatePoll({
         console.log("Network config debug:");
         console.log("- useNetworkVariable result:", votingPackageId);
         console.log("- All network variables:", JSON.stringify(allNetworkVars, null, 2));
-        console.log("- Expected devnet package ID: 0x5833033134626ae19f7de7d92b1b82b46f6976830499cd401d57315371ddf55b");
+        console.log("- Expected devnet package ID: 0x2280151e6f09a81aaffec74b11a9e2e7175907e255cbd68da0a0c5f26da4721b");
         
         // Let's also check the RPC URL
         console.log("- Frontend devnet RPC URL:", getFullnodeUrl('devnet'));
         console.log("- CLI devnet RPC URL: https://fullnode.devnet.sui.io:443");
 
-        if (enableGroups) {
-            // Create group-based poll
-            tx.moveCall({
-                target: `${votingPackageId}::voting::create_group_poll`,
-                arguments: [
-                    tx.object(pollRegistryId),       // PollRegistry
-                    tx.pure.string(name),            // String
-                    tx.pure.string(description),     // String
-                    tx.pure.id(choiceIds[0]),        // ID (choice1)
-                    tx.pure.id(choiceIds[1] || choiceIds[0]), // ID (choice2)
-                    tx.pure.u64(String(deadlineTimestamp)),   // u64 - Unix timestamp
-                    tx.pure.u64(String(maxGroups)),           // u64 - Max groups
-                    tx.pure.u64(String(participantsPerGroup)), // u64 - Participants per group
-                ],
-            });
-        } else {
-            // Create simple poll
-            tx.moveCall({
-                target: `${votingPackageId}::voting::create_simple_poll`,
-                arguments: [
-                    tx.object(pollRegistryId),       // PollRegistry
-                    tx.pure.string(name),            // String
-                    tx.pure.string(description),     // String
-                    tx.pure.id(choiceIds[0]),        // ID (choice1)
-                    tx.pure.id(choiceIds[1] || choiceIds[0]), // ID (choice2)
-                    tx.pure.u64(String(deadlineTimestamp)),   // u64 - Unix timestamp
-                ],
-            });
-        }
-
-        /*
-       const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
-        tx.build({ client: suiClient }).then(result => {
-            console.log("Poll created successfully:", result);
-            alert("Poll created successfully!");
-        }).catch(error => {
-            console.error("Failed to create poll:", error);
-            alert("Failed to create poll. See console for details.");
+        // Create dynamic poll (no hardcoded choices)
+        tx.moveCall({
+            target: `${votingPackageId}::voting::create_dynamic_poll`,
+            arguments: [
+                tx.object(pollRegistryId),           // PollRegistry
+                tx.pure.string(name),                // String
+                tx.pure.string(description),         // String
+                tx.pure.u64(String(deadlineTimestamp)), // u64 - Unix timestamp
+                tx.pure.string(pollType),            // String - "individual" or "group"
+                tx.pure.u64(String(maxGroups)),     // u64 - Max groups
+                tx.pure.u64(String(participantsPerGroup)), // u64 - Participants per group
+            ],
         });
-
-        */
 
         execute(tx, {
             onSuccess: (result) => {
-                console.log("Poll created successfully:", result);
+                console.log("Dynamic poll created successfully:", result);
                 console.log("Full result object:", JSON.stringify(result, null, 2));
                 
-                // Try to extract poll ID from the transaction result
                 let pollId = null;
                 
                 // Method 1: Check objectChanges for created Poll objects
@@ -150,11 +115,17 @@ export function CreatePoll({
                 }
                 
                 if (pollId) {
-                    console.log("Created poll ID:", pollId);
+                    console.log("Created dynamic poll ID:", pollId);
                     console.log("Poll automatically registered in PollRegistry on-chain!");
                     
                     onCreated(pollId);
-                    alert(`Poll created successfully! ID: ${pollId.slice(0, 10)}...\nAll users can now see this poll!`);
+                    
+                    const pollTypeDisplay = pollType === "individual" ? "Individual" : "Group-based";
+                    const capacityInfo = pollType === "individual" 
+                        ? `${maxGroups} individual participants`
+                        : `${maxGroups} groups × ${participantsPerGroup} members = ${maxGroups * participantsPerGroup} total capacity`;
+                    
+                    alert(`🎉 ${pollTypeDisplay} Poll Created!\n\nID: ${pollId.slice(0, 10)}...\nCapacity: ${capacityInfo}\n\nParticipants can now join and create their own groups!`);
                 } else {
                     console.warn("Could not extract poll ID from result. Available keys:", Object.keys(result));
                     onCreated(result.digest);
@@ -162,28 +133,38 @@ export function CreatePoll({
                 }
             }
         });
-    }
+    };
 
     return (
-        <Card className="max-w-lg mx-auto">
+        <Card className="w-full max-w-2xl mx-auto">
             <CardHeader>
-                <CardTitle>Create a New Poll</CardTitle>
-                <CardDescription>Fill out the details below to create a new poll.</CardDescription>
+                <CardTitle>Create a Dynamic Poll</CardTitle>
+                <CardDescription>
+                    Create a poll where participants can form their own groups or represent themselves individually.
+                </CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div className="space-y-2">
                         <Label htmlFor="name">Poll Name</Label>
-                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Favorite Programming Language" />
+                        <Input 
+                            id="name" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            placeholder="e.g., Best Innovation Project 2024" 
+                        />
                     </div>
+                    
                     <div className="space-y-2">
                         <Label htmlFor="description">Description</Label>
-                        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A brief description of the poll" />
+                        <Textarea 
+                            id="description" 
+                            value={description} 
+                            onChange={(e) => setDescription(e.target.value)} 
+                            placeholder="Describe what participants will be voting for..." 
+                        />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="choices">Choices (comma-separated Project IDs)</Label>
-                        <Input id="choices" value={choices} onChange={(e) => setChoices(e.target.value)} placeholder="0x..., 0x..., 0x..." />
-                    </div>
+                    
                     <div className="space-y-2">
                         <Label htmlFor="deadline">Poll Deadline</Label>
                         <input 
@@ -204,55 +185,140 @@ export function CreatePoll({
                         </p>
                     </div>
 
-                    {/* Group Configuration */}
+                    {/* Poll Type Selection */}
                     <div className="space-y-4 border-t pt-4">
-                        <div className="flex items-center space-x-2">
-                            <input 
-                                type="checkbox" 
-                                id="enableGroups" 
-                                checked={enableGroups}
-                                onChange={(e) => setEnableGroups(e.target.checked)}
-                                className="rounded"
-                            />
-                            <Label htmlFor="enableGroups">Enable Group-Based Voting</Label>
+                        <div>
+                            <Label className="text-base font-semibold">Poll Type</Label>
+                            <p className="text-sm text-gray-500 mb-3">Choose how participants will be organized</p>
                         </div>
                         
-                        {enableGroups && (
-                            <div className="space-y-3 ml-6 p-3 bg-gray-50 rounded-lg">
-                                <div className="space-y-2">
-                                    <Label htmlFor="maxGroups">Number of Groups</Label>
-                                    <Input 
-                                        id="maxGroups" 
-                                        type="number" 
-                                        min="2" 
-                                        max="10"
-                                        value={maxGroups} 
-                                        onChange={(e) => setMaxGroups(parseInt(e.target.value) || 2)} 
-                                        placeholder="e.g., 3" 
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Individual Type */}
+                            <div 
+                                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                                    pollType === "individual" 
+                                        ? "border-blue-500 bg-blue-50" 
+                                        : "border-gray-200 hover:border-gray-300"
+                                }`}
+                                onClick={() => {
+                                    setPollType("individual");
+                                    setParticipantsPerGroup(1);
+                                }}
+                            >
+                                <div className="flex items-center space-x-2 mb-2">
+                                    <input 
+                                        type="radio" 
+                                        id="individual" 
+                                        name="pollType"
+                                        checked={pollType === "individual"}
+                                        onChange={() => {}}
+                                        className="rounded"
                                     />
+                                    <Label htmlFor="individual" className="font-medium cursor-pointer">
+                                        🙋‍♂️ Individual Participants
+                                    </Label>
                                 </div>
+                                <p className="text-sm text-gray-600 ml-6">
+                                    Each person represents themselves. Perfect for personal achievements, individual projects, or solo competitions.
+                                </p>
+                            </div>
+
+                            {/* Group Type */}
+                            <div 
+                                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                                    pollType === "group" 
+                                        ? "border-blue-500 bg-blue-50" 
+                                        : "border-gray-200 hover:border-gray-300"
+                                }`}
+                                onClick={() => {
+                                    setPollType("group");
+                                    setParticipantsPerGroup(3);
+                                }}
+                            >
+                                <div className="flex items-center space-x-2 mb-2">
+                                    <input 
+                                        type="radio" 
+                                        id="group" 
+                                        name="pollType"
+                                        checked={pollType === "group"}
+                                        onChange={() => {}}
+                                        className="rounded"
+                                    />
+                                    <Label htmlFor="group" className="font-medium cursor-pointer">
+                                        👥 Team Groups
+                                    </Label>
+                                </div>
+                                <p className="text-sm text-gray-600 ml-6">
+                                    Participants form teams. Great for collaborative projects, team competitions, or group achievements.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {/* Configuration Options */}
+                        <div className="space-y-4 bg-gray-50 rounded-lg p-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="maxGroups">
+                                    {pollType === "individual" ? "Maximum Participants" : "Maximum Groups"}
+                                </Label>
+                                <Input 
+                                    id="maxGroups" 
+                                    type="number" 
+                                    min="2" 
+                                    max="50"
+                                    value={maxGroups} 
+                                    onChange={(e) => setMaxGroups(parseInt(e.target.value) || 2)} 
+                                    placeholder={pollType === "individual" ? "e.g., 20" : "e.g., 5"} 
+                                />
+                            </div>
+                            
+                            {pollType === "group" && (
                                 <div className="space-y-2">
-                                    <Label htmlFor="participantsPerGroup">Participants per Group</Label>
+                                    <Label htmlFor="participantsPerGroup">Members per Group</Label>
                                     <Input 
                                         id="participantsPerGroup" 
                                         type="number" 
                                         min="2" 
-                                        max="20"
+                                        max="10"
                                         value={participantsPerGroup} 
                                         onChange={(e) => setParticipantsPerGroup(parseInt(e.target.value) || 2)} 
-                                        placeholder="e.g., 4" 
+                                        placeholder="e.g., 3" 
                                     />
                                 </div>
-                                <div className="text-xs text-gray-600">
-                                    Total capacity: {maxGroups} groups × {participantsPerGroup} participants = {maxGroups * participantsPerGroup} users
-                                </div>
+                            )}
+                            
+                            <div className="text-sm text-gray-600 bg-white p-3 rounded border">
+                                <strong>📊 Poll Capacity:</strong> {" "}
+                                {pollType === "individual" 
+                                    ? `${maxGroups} individual participants`
+                                    : `${maxGroups} groups × ${participantsPerGroup} members = ${maxGroups * participantsPerGroup} total participants`
+                                }
                             </div>
-                        )}
+                        </div>
                     </div>
 
                     <Button onClick={create} className="w-full" disabled={isPending}>
-                        {isPending ? "Creating..." : (enableGroups ? "Create Group Poll" : "Create Simple Poll")}
+                        {isPending ? "Creating..." : `Create ${pollType === "individual" ? "Individual" : "Group"} Poll`}
                     </Button>
+                    
+                    <div className="text-xs text-gray-500 space-y-1">
+                        <p>💡 <strong>How it works:</strong></p>
+                        <ul className="ml-4 space-y-1">
+                            {pollType === "individual" ? (
+                                <>
+                                    <li>• Each participant joins as an individual</li>
+                                    <li>• First person to join a slot can name themselves</li>
+                                    <li>• Participants vote for other individuals</li>
+                                </>
+                            ) : (
+                                <>
+                                    <li>• Participants form teams of {participantsPerGroup} members</li>
+                                    <li>• First person to join a group can name and describe it</li>
+                                    <li>• Teams must be full before they can vote</li>
+                                    <li>• Teams vote for other teams (not themselves)</li>
+                                </>
+                            )}
+                        </ul>
+                    </div>
                 </div>
             </CardContent>
         </Card>
