@@ -151,7 +151,32 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
     const [expandedPolls, setExpandedPolls] = useState<Set<string>>(new Set());
     const [loadingDetails, setLoadingDetails] = useState<Set<string>>(new Set());
     const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
-    const [userVotes, setUserVotes] = useState<{[pollId: string]: string | number}>({}); // Track user votes per poll
+    const [currentTime, setCurrentTime] = useState(Date.now()); // For real-time updates
+    const [userVotes, setUserVotes] = useState<{[pollId: string]: string | number}>(() => {
+        // Load votes from localStorage on initialization
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('devote-user-votes');
+            return saved ? JSON.parse(saved) : {};
+        }
+        return {};
+    }); // Track user votes per poll
+
+    // Save votes to localStorage whenever userVotes changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('devote-user-votes', JSON.stringify(userVotes));
+        }
+    }, [userVotes]);
+
+    // Real-time poll expiry checking
+    useEffect(() => {
+        // Update current time every 30 seconds to trigger re-renders
+        const interval = setInterval(() => {
+            setCurrentTime(Date.now());
+        }, 30000);
+        
+        return () => clearInterval(interval);
+    }, []);
 
     // Fetch all polls and their associated projects
     useEffect(() => {
@@ -796,7 +821,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
 
     // Helper function to check if poll is expired
     const isPollExpired = (poll: Poll) => {
-        return Date.now() > parseInt(poll.deadline_ms);
+        return currentTime > parseInt(poll.deadline_ms);
     };
 
     // Helper function to check if poll is archived (finalized or expired)
@@ -843,7 +868,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                             : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
-                    Available Polls ({polls.filter(p => !isPollArchived(p)).length})
+                    Available Polls ({polls.filter(p => !p.finalized && currentTime <= parseInt(p.deadline_ms)).length})
                 </button>
                 <button
                     onClick={() => setActiveTab('archived')}
@@ -853,7 +878,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                             : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
-                    Archived Polls ({polls.filter(p => isPollArchived(p)).length})
+                    Archived Polls ({polls.filter(p => p.finalized || currentTime > parseInt(p.deadline_ms)).length})
                 </button>
             </div>
 
