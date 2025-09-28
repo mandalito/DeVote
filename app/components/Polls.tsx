@@ -153,10 +153,10 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
     const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
     const [currentTime, setCurrentTime] = useState(Date.now()); // For real-time updates
     const [userVotes, setUserVotes] = useState<{[pollId: string]: string | number}>(() => {
-        // Load votes from localStorage on initialization
+        // Clear old votes when contract is reset (temporary fix)
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('devote-user-votes');
-            return saved ? JSON.parse(saved) : {};
+            localStorage.removeItem('devote-user-votes');
+            return {};
         }
         return {};
     }); // Track user votes per poll
