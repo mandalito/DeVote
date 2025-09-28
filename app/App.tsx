@@ -36,7 +36,7 @@ function AppWithProviders() {
   );
 }
 
-const NETWORK = "devnet";
+const NETWORK: "devnet" | "testnet" | "mainnet" = "devnet";
 const suiClient = new SuiClient({
   url: getFullnodeUrl(NETWORK),
 });

@@ -6,6 +6,8 @@ import { Transaction } from '@mysten/sui/transactions';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { useState, useEffect } from 'react';
 import { bcs } from '@mysten/sui/bcs';
+import { makePolymediaUrl } from "@polymedia/suitcase-core";
+import { ExternalLink, Clock } from "lucide-react";
 
 // Simple dialog component for group naming
 function GroupNameDialog({ 
@@ -810,27 +812,43 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                 polls.map((poll) => (
                 <Card key={poll.id}>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            {poll.name}
-                            {poll.poll_type === 'individual' && (
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                    Individual
-                                </span>
-                            )}
-                            {poll.poll_type === 'group' && (
-                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                    Team-Based
-                                </span>
-                            )}
-                            {poll.poll_type === 'simple' && (
-                                <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
-                                    Simple Poll
-                                </span>
-                            )}
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                {poll.name}
+                                {poll.poll_type === 'individual' && (
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                        Individual
+                                    </span>
+                                )}
+                                {poll.poll_type === 'group' && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                        Team-Based
+                                    </span>
+                                )}
+                                {poll.poll_type === 'simple' && (
+                                    <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
+                                        Simple Poll
+                                    </span>
+                                )}
+                            </CardTitle>
+                            
+                            {/* Explorer Link */}
+                            <a 
+                                href={makePolymediaUrl("devnet", "object", poll.id)} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-3 text-gray-500 hover:text-gray-700"
+                                title="View on Explorer"
+                            >
+                                <ExternalLink className="h-4 w-4" />
+                            </a>
+                        </div>
                         <CardDescription>{poll.description}</CardDescription>
                         <div className="text-sm text-gray-500 space-y-1">
-                            <p>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</p>
+                            <p className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 text-gray-500" />
+                                <span>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</span>
+                            </p>
                             <p>Status: {poll.finalized ? 'Finalized' : 'Active'}</p>
                             {poll.groups_enabled && (
                                 <p>Capacity: {poll.max_groups} {poll.poll_type === 'individual' ? 'participants' : `groups × ${poll.participants_per_group} members`}</p>
@@ -965,9 +983,20 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                            <div className="space-y-1">
                                                                {members.map((addr, idx) => (
                                                                    <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border">
-                                                                       <code className="text-xs font-mono text-gray-800">
-                                                                           {addr.slice(0, 10)}...{addr.slice(-8)}
-                                                                       </code>
+                                                                       <div className="flex items-center gap-2">
+                                                                           <code className="text-xs font-mono text-gray-800">
+                                                                               {addr.slice(0, 10)}...{addr.slice(-8)}
+                                                                           </code>
+                                                                           <a 
+                                                                               href={makePolymediaUrl("devnet", "address", addr)} 
+                                                                               target="_blank" 
+                                                                               rel="noopener noreferrer"
+                                                                               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-6 w-6 text-gray-400 hover:text-gray-600"
+                                                                               title="View address on Explorer"
+                                                                           >
+                                                                               <ExternalLink className="h-3 w-3" />
+                                                                           </a>
+                                                                       </div>
                                                                        <div className="flex gap-1">
                                                                            {addr === group?.creator && (
                                                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Creator</span>
@@ -1056,22 +1085,32 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     const project = projects[projectId];
                                     const voteCount = poll.tally[projectId] || '0';
                                     return (
-                                        <Button
-                                            key={projectId}
-                                            variant="outline"
-                                            onClick={() => handleVote(poll.id, projectId)}
-                                            disabled={isPending || poll.finalized}
-                                            className="flex-1"
-                                        >
-                                            <div className="text-left">
-                                                <div className="font-medium">
-                                                    {project?.name || `Project ${projectId.slice(0, 8)}...`}
+                                        <div key={projectId} className="flex-1 flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => handleVote(poll.id, projectId)}
+                                                disabled={isPending || poll.finalized}
+                                                className="flex-1"
+                                            >
+                                                <div className="text-left">
+                                                    <div className="font-medium">
+                                                        {project?.name || `Project ${projectId.slice(0, 8)}...`}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {voteCount} votes
+                                                    </div>
                                                 </div>
-                                                <div className="text-xs text-gray-500">
-                                                    {voteCount} votes
-                                                </div>
-                                            </div>
-                                        </Button>
+                                            </Button>
+                                            <a 
+                                                href={makePolymediaUrl("devnet", "object", projectId)} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-3 text-gray-500 hover:text-gray-700"
+                                                title="View project on Explorer"
+                                            >
+                                                <ExternalLink className="h-4 w-4" />
+                                            </a>
+                                        </div>
                                     );
                                 })}
                             </div>
