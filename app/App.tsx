@@ -138,15 +138,15 @@ function App() {
         </DialogContent>
       </Dialog>
 
-      <div className="bg-white shadow-sm border-b">
+      <div className="shadow-sm border-b" style={{backgroundColor: '#F8F8F8'}}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 
-              className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity"
+            <img 
+              src="/DeVote_Logo.jpg" 
+              alt="DeVote Logo" 
+              className="h-14 w-auto cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => window.location.href = '/'}
-            >
-              🗳️ DeVote
-            </h1>
+            />
             {account && zkLoginAccount && (
               <div className="flex items-center gap-3">
                 {/* Balance Display */}
@@ -210,7 +210,13 @@ function App() {
               <Card className="w-full max-w-md bg-gray-800">
                 <CardContent className="pt-6">
                   <div className="text-center space-y-4">
-                    <div className="text-6xl mb-4">🗳️</div>
+                    <div className="mb-4">
+                      <img 
+                        src="/DeVote_Logo.jpg" 
+                        alt="DeVote Logo" 
+                        className="h-16 w-auto mx-auto"
+                      />
+                    </div>
                     <h2 className="text-2xl font-bold text-white">
                       Welcome to DeVote
                     </h2>

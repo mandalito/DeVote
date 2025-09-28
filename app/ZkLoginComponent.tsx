@@ -419,15 +419,15 @@ export default function ZkLoginComponent()
         
     return (
         <div className="min-h-screen w-full">
-            <div className="bg-white shadow-sm border-b">
+            <div className="shadow-sm border-b" style={{backgroundColor: '#F8F8F8'}}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
-                        <h1 
-                            className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity"
+                        <img 
+                            src="/DeVote_Logo.jpg" 
+                            alt="DeVote Logo" 
+                            className="h-14 w-auto cursor-pointer hover:opacity-80 transition-opacity"
                             onClick={() => window.location.href = '/'}
-                        >
-                            🗳️ DeVote
-                        </h1>
+                        />
                     </div>
                 </div>
             </div>
