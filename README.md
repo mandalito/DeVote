@@ -1,5 +1,9 @@
 # Sui zkLogin Team Voting — README
 
+<div align="center">
+  <img src="public/DeVote_Logo.jpg" alt="DeVote Logo" width="300" />
+</div>
+
 > A full-stack, privacy-preserving **hackathon voting** dApp on **Sui** with **zkLogin** onboarding, **one-person-one-vote** via nullifiers, team self-vote prevention, and an auditable yet privacy-respecting results flow.
 
 ---
