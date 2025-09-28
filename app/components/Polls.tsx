@@ -1165,7 +1165,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                        </div>
                                                                    )}
                                                                    
-                                                    {!isPollArchived(poll) && !userInAnyGroup && !isFull && (
+                                                    {!isPollArchived(poll) && !userInAnyGroup && !isFull && !loadingDetails.has(poll.id) && (
                                                         <Button
                                                             size="sm"
                                                             onClick={() => handleJoinGroupClick(poll.id, i, poll.poll_type, groupExists)}
@@ -1177,6 +1177,14 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                 : (isIndividual ? '+ Join as Individual' : '+ Create Group')
                                                             }
                                                         </Button>
+                                                    )}
+                                                    
+                                                    {/* Show loading indicator while details are being fetched */}
+                                                    {!isPollArchived(poll) && !userInAnyGroup && !isFull && loadingDetails.has(poll.id) && (
+                                                        <div className="w-full text-center py-2 text-sm text-gray-500">
+                                                            <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full inline-block mr-2"></div>
+                                                            Loading details...
+                                                        </div>
                                                     )}
                                                     
                                                     {/* Voting buttons for dynamic polls */}
@@ -1239,18 +1247,18 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             if (!group || group.members.length === 0) return null;
                                             
                                             return (
-                                                <div key={i} className="flex items-center justify-between p-3 bg-white rounded border">
+                                                <div key={i} className="flex items-center justify-between p-4 bg-white rounded-lg border-2">
                                                     <div>
-                                                        <div className="font-medium">
+                                                        <div className="text-xl font-bold text-gray-900">
                                                             {group.name || (isIndividual ? `Participant ${i + 1}` : `Group ${i + 1}`)}
                                                         </div>
                                                         {group.description && (
-                                                            <div className="text-sm text-gray-600">{group.description}</div>
+                                                            <div className="text-sm text-gray-600 mt-1">{group.description}</div>
                                                         )}
                                                     </div>
                                                     <div className="text-right">
-                                                        <div className="font-bold text-lg text-blue-600">{voteCount}</div>
-                                                        <div className="text-xs text-gray-500">votes</div>
+                                                        <div className="text-2xl font-bold text-blue-600">{voteCount}</div>
+                                                        <div className="text-sm font-medium text-gray-500">votes</div>
                                                     </div>
                                                 </div>
                                             );
@@ -1312,18 +1320,18 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             const voteCount = parseInt(poll.tally[projectId] || '0');
                                             
                                             return (
-                                                <div key={projectId} className="flex items-center justify-between p-3 bg-white rounded border">
+                                                <div key={projectId} className="flex items-center justify-between p-4 bg-white rounded-lg border-2">
                                                     <div>
-                                                        <div className="font-medium">
+                                                        <div className="text-xl font-bold text-gray-900">
                                                             {project?.name || `Project ${projectId.slice(0, 8)}...`}
                                                         </div>
                                                         {project?.description && (
-                                                            <div className="text-sm text-gray-600">{project.description}</div>
+                                                            <div className="text-sm text-gray-600 mt-1">{project.description}</div>
                                                         )}
                                                     </div>
                                                     <div className="text-right">
-                                                        <div className="font-bold text-lg text-blue-600">{voteCount}</div>
-                                                        <div className="text-xs text-gray-500">votes</div>
+                                                        <div className="text-2xl font-bold text-blue-600">{voteCount}</div>
+                                                        <div className="text-sm font-medium text-gray-500">votes</div>
                                                     </div>
                                                 </div>
                                             );
