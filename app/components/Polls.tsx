@@ -361,7 +361,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     participants_per_group: fields.participants_per_group || '0',
                                     groups: groupsData,
                                     user_to_group: userToGroupData,
-                                    group_tally: fields.group_tally?.fields || {},
+                                    group_tally: {}, // Will be populated when poll details are loaded
                                 };
                                 
                                 // Debug logging
@@ -456,8 +456,41 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
             }
 
             const fields = (pollResponse.data.content as any).fields;
-            const updatedGroupTally = fields.group_tally?.fields || {};
-            console.log(`Updated group_tally from smart contract:`, JSON.stringify(updatedGroupTally, null, 2));
+            let updatedGroupTally: { [groupId: string]: string } = {};
+            
+            // Check if group_tally is a Table object (has id and size)
+            if (fields.group_tally?.fields?.id?.id) {
+                console.log(`Group tally is a Table object with size: ${fields.group_tally.fields.size}`);
+                
+                // For each possible group, try to fetch the vote count from the table
+                const maxGroups = parseInt(poll.max_groups);
+                for (let i = 0; i < maxGroups; i++) {
+                    try {
+                        // Query the table for this group's vote count
+                        const tableResponse = await suiClient.getDynamicFieldObject({
+                            parentId: fields.group_tally.fields.id.id,
+                            name: {
+                                type: "u64",
+                                value: i.toString()
+                            }
+                        });
+                        
+                        if (tableResponse.data?.content && tableResponse.data.content.dataType === 'moveObject') {
+                            const voteCount = (tableResponse.data.content as any).fields.value;
+                            updatedGroupTally[i.toString()] = voteCount.toString();
+                            console.log(`Group ${i} has ${voteCount} votes`);
+                        }
+                    } catch (error) {
+                        // Group has no votes, default to 0
+                        updatedGroupTally[i.toString()] = "0";
+                    }
+                }
+            } else {
+                // Fallback to old format
+                updatedGroupTally = fields.group_tally?.fields || {};
+            }
+            
+            console.log(`Final updated group_tally:`, JSON.stringify(updatedGroupTally, null, 2));
             
             let groupsData: { [groupId: string]: Group } = {};
             let userToGroupData: { [userAddress: string]: string } = {};
