@@ -151,6 +151,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
     const [expandedPolls, setExpandedPolls] = useState<Set<string>>(new Set());
     const [loadingDetails, setLoadingDetails] = useState<Set<string>>(new Set());
     const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+    const [userVotes, setUserVotes] = useState<{[pollId: string]: string | number}>({}); // Track user votes per poll
 
     // Fetch all polls and their associated projects
     useEffect(() => {
@@ -726,6 +727,8 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
             await execute(tx);
             console.log("Successfully voted for group:", targetGroupId);
             alert(`Vote cast for Group ${targetGroupId + 1}! Loading updated results...`);
+            // Track the user's vote
+            setUserVotes(prev => ({...prev, [pollId]: targetGroupId}));
             // Refresh the specific poll's details
             await loadPollDetails(pollId);
         } catch (error) {
@@ -782,11 +785,11 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
 
         try {
             await execute(tx);
-            // TODO: Add success feedback and refetch poll data
             alert("Vote cast successfully!");
+            // Track the user's vote
+            setUserVotes(prev => ({...prev, [pollId]: choiceId}));
         } catch (error) {
             console.error("Failed to cast vote:", error);
-            // TODO: Add user-friendly error feedback
             alert("Failed to cast vote. See console for details.");
         }
     };
@@ -1108,10 +1111,10 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                             size="sm"
                                                                             variant="outline"
                                                                             onClick={() => handleVoteForGroup(poll.id, voteIdx)}
-                                                                            disabled={isPending}
-                                                                            className="text-xs"
+                                                                            disabled={isPending || userVotes[poll.id] !== undefined}
+                                                                            className="text-xs text-black hover:text-white"
                                                                         >
-                                                                            Vote {targetName}
+                                                                            {userVotes[poll.id] === voteIdx ? '✓ Voted' : `Vote ${targetName}`}
                                                         </Button>
                                                     );
                                                 })}
@@ -1177,12 +1180,12 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             <Button
                                                 variant="outline"
                                                 onClick={() => handleVote(poll.id, projectId)}
-                                                disabled={isPending || isPollArchived(poll)}
-                                                className="flex-1"
+                                                disabled={isPending || isPollArchived(poll) || userVotes[poll.id] !== undefined}
+                                                className="flex-1 text-black hover:text-white"
                                             >
                                                 <div className="text-left">
                                                     <div className="font-medium">
-                                                        {project?.name || `Project ${projectId.slice(0, 8)}...`}
+                                                        {userVotes[poll.id] === projectId ? '✓ ' : ''}{project?.name || `Project ${projectId.slice(0, 8)}...`}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {voteCount} votes
