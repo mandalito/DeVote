@@ -10,10 +10,16 @@
 
 - **Idea:** Simple, fair, privacy-preserving voting for hackathons/contests. Users log in with OAuth (Google/Apple/etc.) via **zkLogin**—no seed phrases.
 - **Goal:** Guarantee **one human → one vote**, prevent **self-voting**, and keep choices private while keeping tallies verifiable on-chain.
-- **What’s on-chain:** Team registry, project ↔ team mapping, nullifier checklists, vote tallies, events, and lifecycle controls (open → closed → finalized).
-- **What’s off-chain:** OAuth, issuance of zk proofs, optional allowlists, and the ephemeral key & salt handling needed by zkLogin.
+- **What's on-chain:** Team registry, project ↔ team mapping, nullifier checklists, vote tallies, events, and lifecycle controls (open → closed → finalized).
+- **What's off-chain:** OAuth, issuance of zk proofs, optional allowlists, and the ephemeral key & salt handling needed by zkLogin.
 - **Frontend:** Next.js/React (Sui dapp-kit), flows for login, registration, casting vote, admin ops, and result views.
 - **Security:** Nullifiers to stop double-voting, project–team link prevents self-votes, admin caps and pausability, audit events.
+
+### 📦 Deployed Package IDs (Devnet)
+
+- Voting Package: `0xa9904399c92edf750a34f7a7018c67e356270a09cfb86c91243afb3f18544e88`
+- Voting Registry: `0x42599a46877871145418c5106d5acbf2e1f573768bdc1c9304d6030e9f271cd9`
+- Poll Registry: `0x1cb2788134f00fa5c6f921dd0dfebc95942409d16963152abd4b7097d71082b8`
 
 ---
 
@@ -179,15 +185,100 @@ Hackathon voting should be inclusive (no wallet friction), fair (no duplicates/b
 
 ---
 
-## 9) Repository Structure
+## 9) On-Chain Packages
+
+The DeVote project includes several on-chain packages developed in Move for the Sui blockchain:
+
+### 9.1 Main Package: `voting_contract`
+
+**Location:** `/voting_contract/`
+**Module name:** `voting::voting`
+**Description:** Main package containing all privacy-preserving voting logic.
+
+**Key Components:**
+- **Registry**: Main shared object storing contest state
+- **AdminCap**: Admin capability to control voting lifecycle
+- **RegistrarCap**: Registration capability to manage teams and projects
+- **FinalizerCap**: Finalizer capability to seal results
+
+**Data Tables:**
+- `member_to_team`: Mapping nullifier → team ID
+- `project_to_team`: Mapping project ID → team ID  
+- `team_vote_count`: Vote counters per team
+- `used_nullifiers`: Used nullifiers (double-vote prevention)
+- `groups`: Support for voter groups (optional)
+
+**Main Functions:**
+- `register_team()`: Register a team/project
+- `link_member()`: Link member ↔ team
+- `cast_vote()`: Vote with nullifier verification
+- `open()` / `close()` / `finalize()`: Lifecycle control
+- `pause()` / `unpause()`: Emergency controls
+
+**Emitted Events:**
+- `TeamRegistered`: New team registered
+- `MemberLinked`: Member linked to team
+- `VoteCast`: Vote cast
+- `Closed` / `Finalized`: Contest states
+- `Paused` / `Unpaused`: Emergency controls
+
+### 9.2 Demo Package: `counter`
+
+**Location:** `/move/counter/`
+**Module name:** `counter::counter`
+**Description:** Simple shared object example for demonstration and testing.
+
+**Components:**
+- **Counter**: Shared object with incrementable counter
+- **OwnerCap**: Owner capability (unused in current implementation)
+
+**Functions:**
+- `create()`: Create a new shared counter
+- `increment()`: Increment counter (+1)
+- `set_value()`: Set value (owner only)
+
+### 9.3 Package Configuration
+
+**Sui Framework Dependencies:**
+- Version: `framework/testnet` (for counter)
+- Move Edition: `2024.beta`
+
+**Named Addresses:**
+- `voting = "0x0"` (voting_contract package)
+- `counter = "0x0"` (counter package)
+
+### 9.4 Build and Deploy
+
+```bash
+# Main voting package
+cd voting_contract
+sui move build
+sui client publish --gas-budget 100000000
+
+# Demo package (optional)
+cd move/counter  
+sui move build
+sui client publish --gas-budget 50000000
+```
+
+**Note:** The `counter` package is primarily used for demonstration and testing purposes. The functional core of DeVote resides in the `voting_contract` package.
+
+---
+
+## 10) Repository Structure
 
 ```
 .
 ├── move/
-│   └── voting/
+│   └── counter/
 │       ├── Move.toml
 │       └── sources/
-│           └── voting.move
+│           └── counter.move
+├── voting_contract/
+│   ├── Move.toml
+│   └── sources/
+│       ├── voting.move
+│       └── voting_contract.move
 ├── frontend/
 │   ├── app/ (Next.js App Router)
 │   │   ├── page.tsx
@@ -209,7 +300,7 @@ Hackathon voting should be inclusive (no wallet friction), fair (no duplicates/b
 
 ---
 
-## 10) Smart Contract (Move) – Key Entry Points
+## 11) Smart Contract (Move) – Key Entry Points
 
 > **Note:** Names mirror your latest snippets. If your local version differs, adjust identifiers accordingly.
 
@@ -227,7 +318,7 @@ Hackathon voting should be inclusive (no wallet friction), fair (no duplicates/b
 
 ---
 
-## 11) zkLogin: What You Need to Know (Short)
+## 12) zkLogin: What You Need to Know (Short)
 
 - **OAuth login** → you get an `id_token` (JWT).
 - Browser creates **ephemeral keypair** and **address seed**:
@@ -241,7 +332,7 @@ Hackathon voting should be inclusive (no wallet friction), fair (no duplicates/b
 
 ---
 
-## 12) Environment Variables
+## 13) Environment Variables
 
 Create `frontend/.env.local` from `env.example`:
 
@@ -265,23 +356,29 @@ ZK_SALT_HEX=<SERVER_SIDE_32B_HEX>
 
 ---
 
-## 13) Setup & Commands
+## 14) Setup & Commands
 
-### 13.1 Prerequisites
+### 14.1 Prerequisites
 - Node 18+
 - pnpm or yarn
 - Sui CLI (for dev/test)
 - Move toolchain
 
-### 13.2 Move: Build & Publish
+### 14.2 Move: Build & Publish
 ```bash
-cd move/voting
+# Main voting package
+cd voting_contract
 sui move build
 sui client publish --gas-budget 100000000
 # Note the package ID and shared Registry object ID
+
+# Demo package (optional)
+cd move/counter
+sui move build
+sui client publish --gas-budget 50000000
 ```
 
-### 13.3 Frontend: Run
+### 14.3 Frontend: Run
 ```bash
 cd frontend
 pnpm i
@@ -290,7 +387,7 @@ pnpm dev
 
 ---
 
-## 14) Frontend Integration Highlights
+## 15) Frontend Integration Highlights
 
 - **Creating a Move vector in TS SDK**  
   The Sui SDK expects **Move vectors**, not raw JS arrays, for certain args. Use helper:
@@ -325,7 +422,7 @@ pnpm dev
 
 ---
 
-## 15) Admin Lifecycle
+## 16) Admin Lifecycle
 
 - **Register team:** add `(team_id, project_id)` pairing.
 - **Open:** start accepting votes.
@@ -339,7 +436,7 @@ pnpm dev
 
 ---
 
-## 16) Data Access & Analytics
+## 17) Data Access & Analytics
 
 - **On-chain tables:** read `team_vote_count[team_id]`.
 - **Events to index:** `TeamRegistered`, `VoteCast`, `Closed`, `Finalized`.
@@ -347,7 +444,7 @@ pnpm dev
 
 ---
 
-## 17) Testing Strategy
+## 18) Testing Strategy
 
 - **Move unit tests:** invariants (no double votes, self-vote blocked, lifecycle constraints).
 - **Localnet e2e:** spin localnet, publish module, run scripted votes.
@@ -356,7 +453,7 @@ pnpm dev
 
 ---
 
-## 18) Gas & Scalability
+## 19) Gas & Scalability
 
 - **Tables** keep per-team counters small; events carry detail without bloating state.
 - **Nullifier check** is O(1) on table lookup.
@@ -364,7 +461,7 @@ pnpm dev
 
 ---
 
-## 19) Limitations & Future Work
+## 20) Limitations & Future Work
 
 - **Sybil resistance** depends on off-chain policy (allowlists, domain, ticketing).
 - **Selective disclosure** (e.g., proving eligibility without deanonymization) can be extended with additional ZK circuits.
@@ -378,7 +475,7 @@ pnpm dev
 
 ---
 
-## 20) Roles & Permissions
+## 21) Roles & Permissions
 
 - **AdminCap holder**: can register teams, open/close/finalize, pause/unpause.
 - **Voter**: any zkLogin user who passes off-chain eligibility and has a valid nullifier.
@@ -386,7 +483,7 @@ pnpm dev
 
 ---
 
-## 21) API Notes (Optional Backend)
+## 22) API Notes (Optional Backend)
 
 If you run a tiny backend for allowlists / nonces:
 
@@ -397,7 +494,7 @@ If you run a tiny backend for allowlists / nonces:
 
 ---
 
-## 22) Operational Runbook
+## 23) Operational Runbook
 
 - **Before event**: publish module, record `packageId` + `registryId`, configure OAuth creds, preload teams, run **open**.
 - **During event**: monitor RPC, track `VoteCast` rate, keep an eye on pauses if needed.
@@ -405,7 +502,7 @@ If you run a tiny backend for allowlists / nonces:
 
 ---
 
-## 23) Glossary
+## 24) Glossary
 
 - **Nullifier**: unique, non-reusable tag derived from identity + scope (prevents double voting).
 - **zkLogin**: Sui native scheme to derive addresses & signatures from OAuth while preserving privacy.
