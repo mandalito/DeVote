@@ -364,6 +364,14 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     group_tally: fields.group_tally?.fields || {},
                                 };
                                 
+                                // Debug logging
+                                console.log(`Poll ${poll.id} data:`, {
+                                    tally: poll.tally,
+                                    group_tally: poll.group_tally,
+                                    finalized: poll.finalized,
+                                    expired: Date.now() > parseInt(poll.deadline_ms)
+                                });
+                                
                                 // Poll loaded with basic info only - details loaded on demand
                             pollsData.push(poll);
                             
@@ -749,6 +757,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         });
 
         try {
+            console.log("Attempting to vote for group:", targetGroupId, "in poll:", pollId);
             await execute(tx);
             console.log("Successfully voted for group:", targetGroupId);
             alert(`Vote cast for Group ${targetGroupId + 1}! Loading updated results...`);
@@ -756,6 +765,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
             setUserVotes(prev => ({...prev, [pollId]: targetGroupId}));
             // Refresh the specific poll's details
             await loadPollDetails(pollId);
+            console.log("Poll details reloaded after vote");
         } catch (error) {
             console.error("Failed to vote for group:", error);
             alert("Failed to cast vote. See console for details.");
@@ -809,10 +819,12 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         });
 
         try {
+            console.log("Attempting to vote for choice:", choiceId, "in poll:", pollId);
             await execute(tx);
             alert("Vote cast successfully!");
             // Track the user's vote
             setUserVotes(prev => ({...prev, [pollId]: choiceId}));
+            console.log("Vote recorded for regular poll");
         } catch (error) {
             console.error("Failed to cast vote:", error);
             alert("Failed to cast vote. See console for details.");
@@ -1163,6 +1175,10 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                             {isPollArchived(poll) && (
                                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
                                     <h4 className="font-semibold text-gray-800 mb-3">📊 Final Results</h4>
+                                    {/* Debug info */}
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        Debug: group_tally = {JSON.stringify(poll.group_tally)}
+                                    </div>
                                     <div className="space-y-2">
                                         {Array.from({ length: parseInt(poll.max_groups) }, (_, i) => {
                                             const group = poll.groups[i.toString()];
@@ -1235,6 +1251,10 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                             {isPollArchived(poll) && (
                                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
                                     <h4 className="font-semibold text-gray-800 mb-3">📊 Final Results</h4>
+                                    {/* Debug info */}
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        Debug: tally = {JSON.stringify(poll.tally)}
+                                    </div>
                                     <div className="space-y-2">
                                         {poll.choices.map((projectId) => {
                                             const project = projects[projectId];
