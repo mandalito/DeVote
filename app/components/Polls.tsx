@@ -371,6 +371,8 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     finalized: poll.finalized,
                                     expired: Date.now() > parseInt(poll.deadline_ms)
                                 });
+                                console.log(`Poll ${poll.id} tally details:`, JSON.stringify(poll.tally, null, 2));
+                                console.log(`Poll ${poll.id} group_tally details:`, JSON.stringify(poll.group_tally, null, 2));
                                 
                                 // Poll loaded with basic info only - details loaded on demand
                             pollsData.push(poll);
@@ -441,6 +443,21 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
             
             const poll = polls.find(p => p.id === pollId);
             if (!poll || !poll.groups_enabled) return;
+
+            // First, fetch the updated poll object to get latest vote counts
+            const pollResponse = await suiClient.getObject({
+                id: pollId,
+                options: { showContent: true }
+            });
+
+            if (!pollResponse.data?.content || pollResponse.data.content.dataType !== 'moveObject') {
+                console.error(`Failed to fetch updated poll object ${pollId}`);
+                return;
+            }
+
+            const fields = (pollResponse.data.content as any).fields;
+            const updatedGroupTally = fields.group_tally?.fields || {};
+            console.log(`Updated group_tally from smart contract:`, JSON.stringify(updatedGroupTally, null, 2));
             
             let groupsData: { [groupId: string]: Group } = {};
             let userToGroupData: { [userAddress: string]: string } = {};
@@ -630,16 +647,17 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                 }
             }
             
-            // Update the specific poll with detailed data
+            // Update the specific poll with detailed data including updated vote counts
             setPolls(prevPolls => 
                 prevPolls.map(p => 
                     p.id === pollId 
-                        ? { ...p, groups: groupsData, user_to_group: userToGroupData }
+                        ? { ...p, groups: groupsData, user_to_group: userToGroupData, group_tally: updatedGroupTally }
                         : p
                 )
             );
             
             console.log(`✅ Loaded details for poll ${pollId}`);
+            console.log(`Updated poll groups:`, JSON.stringify(groupsData, null, 2));
             
         } catch (error) {
             console.error(`❌ Failed to load details for poll ${pollId}:`, error);
