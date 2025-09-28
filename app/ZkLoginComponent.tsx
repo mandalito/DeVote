@@ -489,13 +489,6 @@ export default function ZkLoginComponent()
                                                         </div>
                                                         <div className="text-white"><strong>User ID:</strong> {acct.sub}</div>
                                                         <div className="text-white"><strong>Balance:</strong> {typeof balance === "undefined" ? "(loading)" : `${balance} SUI`}</div>
-                                                        <Button
-                                                            onClick={() => sendTransaction(acct)}
-                                                            disabled={!balance}
-                                                            className="w-full bg-blue-600 hover:bg-blue-700"
-                                                        >
-                                                            Send transaction
-                                                        </Button>
                                                         {balance === 0 && NETWORK !== 'mainnet' && (
                                                             <Button
                                                                 onClick={() => {

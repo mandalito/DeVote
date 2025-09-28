@@ -150,6 +150,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
     const [selectedPoll, setSelectedPoll] = useState<{ pollId: string; groupId: number; pollType: string } | null>(null);
     const [expandedPolls, setExpandedPolls] = useState<Set<string>>(new Set());
     const [loadingDetails, setLoadingDetails] = useState<Set<string>>(new Set());
+    const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
     // Fetch all polls and their associated projects
     useEffect(() => {
@@ -790,10 +791,36 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
         }
     };
 
+    // Helper function to check if poll is expired
+    const isPollExpired = (poll: Poll) => {
+        return Date.now() > parseInt(poll.deadline_ms);
+    };
+
+    // Helper function to check if poll is archived (finalized or expired)
+    const isPollArchived = (poll: Poll) => {
+        return poll.finalized || isPollExpired(poll);
+    };
+
+    // Filter polls based on active tab
+    const filteredPolls = polls.filter(poll => {
+        if (activeTab === 'active') {
+            return !isPollArchived(poll);
+        } else {
+            return isPollArchived(poll);
+        }
+    });
+
     if (loading) {
         return (
             <div className="space-y-6">
-                <h2 className="text-2xl font-bold">Available Polls</h2>
+                <div className="flex space-x-1 border-b border-gray-200">
+                    <button className="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent">
+                        Available Polls
+                    </button>
+                    <button className="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent">
+                        Archived Polls
+                    </button>
+                </div>
                 <div className="text-center py-8">
                     <p className="text-gray-500">Loading polls...</p>
                 </div>
@@ -803,13 +830,41 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Available Polls</h2>
-            {polls.length === 0 ? (
+            {/* Tab Navigation */}
+            <div className="flex space-x-1 border-b border-gray-200">
+                <button
+                    onClick={() => setActiveTab('active')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${ 
+                        activeTab === 'active'
+                            ? 'text-blue-600 border-blue-600'
+                            : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                    Available Polls ({polls.filter(p => !isPollArchived(p)).length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('archived')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${ 
+                        activeTab === 'archived'
+                            ? 'text-blue-600 border-blue-600'
+                            : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                    Archived Polls ({polls.filter(p => isPollArchived(p)).length})
+                </button>
+            </div>
+
+            {/* Poll List */}
+            {filteredPolls.length === 0 ? (
                 <div className="text-center py-8">
-                    <p className="text-gray-500">No polls found. Create the first poll above!</p>
+                    <p className="text-gray-500">
+                        {activeTab === 'active' 
+                            ? 'No active polls found. Create the first poll above!' 
+                            : 'No archived polls found.'}
+                    </p>
                 </div>
             ) : (
-                polls.map((poll) => (
+                filteredPolls.map((poll) => (
                 <Card key={poll.id}>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -849,7 +904,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                 <Clock className="h-3 w-3 text-gray-500" />
                                 <span>Deadline: {new Date(parseInt(poll.deadline_ms)).toLocaleString()}</span>
                             </p>
-                            <p>Status: {poll.finalized ? 'Finalized' : 'Active'}</p>
+                            <p>Status: {poll.finalized ? 'Finalized' : isPollExpired(poll) ? 'Expired' : 'Active'}</p>
                             {poll.groups_enabled && (
                                 <p>Capacity: {poll.max_groups} {poll.poll_type === 'individual' ? 'participants' : `groups × ${poll.participants_per_group} members`}</p>
                             )}
@@ -1019,7 +1074,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                                        </div>
                                                                    )}
                                                                    
-                                                    {!poll.finalized && !userInAnyGroup && !isFull && (
+                                                    {!isPollArchived(poll) && !userInAnyGroup && !isFull && (
                                                         <Button
                                                             size="sm"
                                                             onClick={() => handleJoinGroupClick(poll.id, i, poll.poll_type, groupExists)}
@@ -1034,7 +1089,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                                     )}
                                                     
                                                     {/* Voting buttons for dynamic polls */}
-                                                    {!poll.finalized && userInAnyGroup && isFull && userInThisGroup && (
+                                                    {!isPollArchived(poll) && userInAnyGroup && isFull && userInThisGroup && (
                                                         <div className="space-y-2">
                                                             <div className="text-xs text-blue-600 font-medium">
                                                                 Vote for other {isIndividual ? 'participants' : 'groups'}:
@@ -1075,6 +1130,39 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     })}
                                 </div>
                             </div>
+
+                            {/* Results section for archived dynamic polls */}
+                            {isPollArchived(poll) && (
+                                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+                                    <h4 className="font-semibold text-gray-800 mb-3">📊 Final Results</h4>
+                                    <div className="space-y-2">
+                                        {Array.from({ length: parseInt(poll.max_groups) }, (_, i) => {
+                                            const group = poll.groups[i.toString()];
+                                            const voteCount = parseInt(poll.group_tally[i.toString()] || '0');
+                                            const isIndividual = poll.poll_type === 'individual';
+                                            
+                                            if (!group || group.members.length === 0) return null;
+                                            
+                                            return (
+                                                <div key={i} className="flex items-center justify-between p-3 bg-white rounded border">
+                                                    <div>
+                                                        <div className="font-medium">
+                                                            {group.name || (isIndividual ? `Participant ${i + 1}` : `Group ${i + 1}`)}
+                                                        </div>
+                                                        {group.description && (
+                                                            <div className="text-sm text-gray-600">{group.description}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="font-bold text-lg text-blue-600">{voteCount}</div>
+                                                        <div className="text-xs text-gray-500">votes</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         // Regular poll UI (existing)
@@ -1089,7 +1177,7 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                             <Button
                                                 variant="outline"
                                                 onClick={() => handleVote(poll.id, projectId)}
-                                                disabled={isPending || poll.finalized}
+                                                disabled={isPending || isPollArchived(poll)}
                                                 className="flex-1"
                                             >
                                                 <div className="text-left">
@@ -1114,6 +1202,36 @@ export function Polls({ execute, isPending, walletAddress, zkLoginAccountAddress
                                     );
                                 })}
                             </div>
+
+                            {/* Results section for archived regular polls */}
+                            {isPollArchived(poll) && (
+                                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+                                    <h4 className="font-semibold text-gray-800 mb-3">📊 Final Results</h4>
+                                    <div className="space-y-2">
+                                        {poll.choices.map((projectId) => {
+                                            const project = projects[projectId];
+                                            const voteCount = parseInt(poll.tally[projectId] || '0');
+                                            
+                                            return (
+                                                <div key={projectId} className="flex items-center justify-between p-3 bg-white rounded border">
+                                                    <div>
+                                                        <div className="font-medium">
+                                                            {project?.name || `Project ${projectId.slice(0, 8)}...`}
+                                                        </div>
+                                                        {project?.description && (
+                                                            <div className="text-sm text-gray-600">{project.description}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="font-bold text-lg text-blue-600">{voteCount}</div>
+                                                        <div className="text-xs text-gray-500">votes</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                             </>
