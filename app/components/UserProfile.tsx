@@ -62,7 +62,7 @@ export function UserProfile({ account }: UserProfileProps) {
             <Button
                 variant="outline"
                 onClick={() => setIsOpen(true)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 hover:text-white hover:[&>svg]:text-white"
             >
                 <User className="h-4 w-4" />
                 {shortenAddress(account.userAddr)}
@@ -102,7 +102,7 @@ export function UserProfile({ account }: UserProfileProps) {
                                             size="sm"
                                             onClick={() => copyToClipboard(account.userAddr, 'address')}
                                         >
-                                            <Copy className="h-4 w-4" />
+                                            <Copy className="h-4 w-4 text-gray-500" />
                                         </Button>
                                         <a 
                                             href={explorerLink} 
@@ -110,7 +110,7 @@ export function UserProfile({ account }: UserProfileProps) {
                                             rel="noopener noreferrer"
                                             className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-3"
                                         >
-                                            <ExternalLink className="h-4 w-4" />
+                                            <ExternalLink className="h-4 w-4 text-gray-500" />
                                         </a>
                                     </div>
                                     {copiedField === 'address' && (

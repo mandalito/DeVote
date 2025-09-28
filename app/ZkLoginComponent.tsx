@@ -66,8 +66,10 @@ export default function ZkLoginComponent()
     const accounts = useRef<AccountData[]>(loadAccounts()); 
     const [balances, setBalances] = useState<Map<string, number>>(new Map()); 
     const [modalContent, setModalContent] = useState<string | null>(null);
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
+        setIsClient(true);
         completeZkLogin();
         fetchBalances(accounts.current);
         const interval = setInterval(() => fetchBalances(accounts.current), 5_000);
@@ -413,98 +415,117 @@ export default function ZkLoginComponent()
         setBalances(new Map());
     }
 
-    const openIdProviders: OpenIdProvider[] = (typeof window !== 'undefined' && isLocalhost())
-        ? ["google", "twitch", "facebook"]
-        : ["google", "twitch"];
+    const openIdProviders: OpenIdProvider[] = ["twitch"];
         
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-            <Dialog open={modalContent !== null} onOpenChange={(open) => !open && setModalContent(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Loading</DialogTitle>
-                    </DialogHeader>
-                    {modalContent}
-                </DialogContent>
-            </Dialog>
-
-            <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle className="text-2xl font-bold text-center">Sui zkLogin</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <h3 className="text-lg font-semibold">Log in:</h3>
-                            <div className="flex flex-col space-y-2">
-                                {openIdProviders.map(provider => (
-                                    <Button
-                                        key={provider}
-                                        onClick={() => beginZkLogin(provider)}
-                                        variant="outline"
-                                        className="w-full"
-                                    >
-                                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
-                                    </Button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {accounts.current.length > 0 && (
-                            <div className="space-y-4 pt-4 border-t">
-                                <h3 className="text-lg font-semibold">Accounts:</h3>
-                                {accounts.current.map(acct => {
-                                    const balance = balances.get(acct.userAddr);
-                                    const explorerLink = makePolymediaUrl(NETWORK, "address", acct.userAddr);
-                                    return (
-                                        <div key={acct.userAddr} className="p-4 border rounded-lg space-y-2">
-                                            <div>
-                                                <span className={`px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800`}>
-                                                    {acct.provider.charAt(0).toUpperCase() + acct.provider.slice(1)}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <strong>Address:</strong>{" "}
-                                                <a href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                                                    {shortenAddress(acct.userAddr)}
-                                                </a>
-                                            </div>
-                                            <div><strong>User ID:</strong> {acct.sub}</div>
-                                            <div><strong>Balance:</strong> {typeof balance === "undefined" ? "(loading)" : `${balance} SUI`}</div>
-                                            <Button
-                                                onClick={() => sendTransaction(acct)}
-                                                disabled={!balance}
-                                                className="w-full"
-                                            >
-                                                Send transaction
-                                            </Button>
-                                            {balance === 0 && NETWORK !== 'mainnet' && (
-                                                <Button
-                                                    onClick={() => {
-                                                        requestSuiFromFaucet(NETWORK as 'testnet' | 'devnet' | 'localnet', acct.userAddr);
-                                                        setModalContent("💰 Requesting SUI from faucet...");
-                                                        setTimeout(() => setModalContent(null), 3000);
-                                                    }}
-                                                    variant="outline"
-                                                    className="w-full"
-                                                >
-                                                    Use faucet
-                                                </Button>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        <div className="pt-4 border-t">
-                            <Button onClick={clearState} variant="outline" className="w-full border-red-500 text-red-500 hover:bg-red-50">
-                                🧨 Clear State
-                            </Button>
-                        </div>
+        <div className="min-h-screen w-full">
+            <div className="bg-white shadow-sm border-b">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16">
+                        <h1 
+                            className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => window.location.href = '/'}
+                        >
+                            🗳️ DeVote
+                        </h1>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
+
+            <div className="bg-black min-h-screen">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                        <Dialog open={modalContent !== null} onOpenChange={(open) => !open && setModalContent(null)}>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Loading</DialogTitle>
+                                </DialogHeader>
+                                {modalContent}
+                            </DialogContent>
+                        </Dialog>
+
+                        <Card className="w-full max-w-md bg-gray-800">
+                            <CardHeader>
+                                <CardTitle className="text-2xl font-bold text-center text-white">zkLogin Authentication</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <h3 className="text-lg font-semibold text-white">Connect with Twitch:</h3>
+                                        <div className="flex flex-col space-y-2">
+                                            {openIdProviders.map(provider => (
+                                                <Button
+                                                    key={provider}
+                                                    onClick={() => beginZkLogin(provider)}
+                                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2"
+                                                >
+                                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
+                                                    </svg>
+                                                    Login with Twitch
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {isClient && accounts.current.length > 0 && (
+                                        <div className="space-y-4 pt-4 border-t border-gray-600">
+                                            <h3 className="text-lg font-semibold text-white">Connected Accounts:</h3>
+                                            {accounts.current.map(acct => {
+                                                const balance = balances.get(acct.userAddr);
+                                                const explorerLink = makePolymediaUrl(NETWORK, "address", acct.userAddr);
+                                                return (
+                                                    <div key={acct.userAddr} className="p-4 border border-gray-600 rounded-lg space-y-2 bg-gray-700">
+                                                        <div>
+                                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800`}>
+                                                                {acct.provider.charAt(0).toUpperCase() + acct.provider.slice(1)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-white">
+                                                            <strong>Address:</strong>{" "}
+                                                            <a href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                                                                {shortenAddress(acct.userAddr)}
+                                                            </a>
+                                                        </div>
+                                                        <div className="text-white"><strong>User ID:</strong> {acct.sub}</div>
+                                                        <div className="text-white"><strong>Balance:</strong> {typeof balance === "undefined" ? "(loading)" : `${balance} SUI`}</div>
+                                                        <Button
+                                                            onClick={() => sendTransaction(acct)}
+                                                            disabled={!balance}
+                                                            className="w-full bg-blue-600 hover:bg-blue-700"
+                                                        >
+                                                            Send transaction
+                                                        </Button>
+                                                        {balance === 0 && NETWORK !== 'mainnet' && (
+                                                            <Button
+                                                                onClick={() => {
+                                                                    requestSuiFromFaucet(NETWORK as 'testnet' | 'devnet' | 'localnet', acct.userAddr);
+                                                                    setModalContent("💰 Requesting SUI from faucet...");
+                                                                    setTimeout(() => setModalContent(null), 3000);
+                                                                }}
+                                                                variant="outline"
+                                                                className="w-full border-gray-500 text-gray-300 hover:bg-gray-600"
+                                                            >
+                                                                Use faucet
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <div className="pt-4 border-t border-gray-600">
+                                        <Button onClick={clearState} variant="outline" className="w-full border-red-500 text-red-500 hover:bg-red-600 hover:text-white">
+                                            🧨 Clear State
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

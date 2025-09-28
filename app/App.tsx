@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   SuiClientProvider,
   WalletProvider,
@@ -11,12 +11,16 @@ import "@mysten/dapp-kit/dist/index.css";
 import { networkConfig } from "./networkConfig";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Link from "next/link";
 import { useZkLogin } from "./contexts/ZkLoginContext";
 import { CreatePoll } from "./components/CreatePoll";
 import { Polls } from "./components/Polls";
 import { UserProfile } from "./components/UserProfile";
 import { Transaction } from "@mysten/sui/transactions";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { requestSuiFromFaucet } from "@polymedia/suitcase-core";
+import { Coins } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +36,11 @@ function AppWithProviders() {
   );
 }
 
+const NETWORK = "devnet";
+const suiClient = new SuiClient({
+  url: getFullnodeUrl(NETWORK),
+});
+
 function App() {
   const currentAccount = useCurrentAccount();
   const { 
@@ -41,6 +50,8 @@ function App() {
     isPending: isZkLoginTxPending,
   } = useZkLogin();
   const [pollsRefreshTrigger, setPollsRefreshTrigger] = useState(0);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [modalContent, setModalContent] = useState<string | null>(null);
   const {
     mutate: signAndExecute,
     isPending: isWalletTxPending,
@@ -49,6 +60,51 @@ function App() {
   const account = currentAccount || (zkLoginAccount ? {
     address: zkLoginAccount.userAddr,
   } : null);
+
+  // Fetch balance for the current account
+  const fetchBalance = async (address: string) => {
+    try {
+      const suiBalance = await suiClient.getBalance({
+        owner: address,
+        coinType: "0x2::sui::SUI",
+      });
+      setBalance(+suiBalance.totalBalance / 1_000_000_000);
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+      setBalance(null);
+    }
+  };
+
+  // Fetch balance when account changes
+  useEffect(() => {
+    if (account?.address) {
+      fetchBalance(account.address);
+      const interval = setInterval(() => fetchBalance(account.address), 10_000); // Update every 10 seconds
+      return () => clearInterval(interval);
+    } else {
+      setBalance(null);
+    }
+  }, [account?.address]);
+
+  // Handle faucet request
+  const handleFaucetRequest = async () => {
+    if (!account?.address) return;
+    
+    setModalContent("💰 Requesting SUI from faucet...");
+    try {
+      await requestSuiFromFaucet(NETWORK as 'testnet' | 'devnet' | 'localnet', account.address);
+      // Refresh balance after a short delay
+      setTimeout(() => {
+        if (account?.address) {
+          fetchBalance(account.address);
+        }
+      }, 3000);
+    } catch (error) {
+      console.error("Faucet request failed:", error);
+    } finally {
+      setTimeout(() => setModalContent(null), 3000);
+    }
+  };
 
   const handleLogout = () => {
     if (zkLoginAccount) {
@@ -73,17 +129,52 @@ function App() {
 
   return (
     <div className="min-h-screen w-full">
+      <Dialog open={modalContent !== null} onOpenChange={(open) => !open && setModalContent(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Processing</DialogTitle>
+          </DialogHeader>
+          {modalContent}
+        </DialogContent>
+      </Dialog>
+
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            <h1 
+              className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => window.location.href = '/'}
+            >
               🗳️ DeVote
             </h1>
             {account && zkLoginAccount && (
               <div className="flex items-center gap-3">
+                {/* Balance Display */}
+                <div className="flex items-center gap-2 text-black">
+                  <Coins className="h-4 w-4" />
+                  <span className="font-medium">
+                    {balance !== null ? `${balance.toFixed(4)} SUI` : 'Loading...'}
+                  </span>
+                </div>
+                
+                {/* User Profile */}
                 <div className="text-black">
                   <UserProfile account={zkLoginAccount} />
                 </div>
+                
+                {/* Faucet Button */}
+                {NETWORK !== 'mainnet' && (
+                  <Button 
+                    onClick={handleFaucetRequest}
+                    variant="outline" 
+                    size="sm"
+                    className="text-black border-black hover:bg-black hover:text-white"
+                  >
+                    💰 Faucet
+                  </Button>
+                )}
+                
+                {/* Logout Button */}
                 <Button onClick={handleLogout} variant="outline" className="text-black border-black hover:bg-black hover:text-white">
                   Logout
                 </Button>
@@ -116,11 +207,11 @@ function App() {
             </div>
           ) : (
             <div className="flex items-center justify-center min-h-[60vh]">
-              <Card className="w-full max-w-md">
+              <Card className="w-full max-w-md bg-gray-800">
                 <CardContent className="pt-6">
                   <div className="text-center space-y-4">
                     <div className="text-6xl mb-4">🗳️</div>
-                    <h2 className="text-2xl font-bold text-gray-900">
+                    <h2 className="text-2xl font-bold text-white">
                       Welcome to DeVote
                     </h2>
                     <p className="text-gray-600">

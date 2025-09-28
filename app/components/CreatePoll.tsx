@@ -36,11 +36,52 @@ export function CreatePoll({
     const [maxGroups, setMaxGroups] = useState(10);
     const [participantsPerGroup, setParticipantsPerGroup] = useState(1); // 1 for individual, more for groups
     
+    // Validation states
+    const [errors, setErrors] = useState<{[key: string]: string}>({});
+    
     const votingPackageId = useNetworkVariable("votingPackageId");
     const pollRegistryId = useNetworkVariable("pollRegistryId");
     const allNetworkVars = useNetworkVariables();
 
+    // Validation function
+    const validateForm = () => {
+        const newErrors: {[key: string]: string} = {};
+        
+        if (!name.trim()) {
+            newErrors.name = "Poll name is required";
+        }
+        
+        if (!description.trim()) {
+            newErrors.description = "Description is required";
+        }
+        
+        if (!deadlineDate) {
+            newErrors.deadline = "Deadline is required";
+        } else {
+            const selectedDate = new Date(deadlineDate);
+            const now = new Date();
+            if (selectedDate <= now) {
+                newErrors.deadline = "Deadline must be in the future";
+            }
+        }
+        
+        if (maxGroups < 2) {
+            newErrors.maxGroups = "Must have at least 2 participants/groups";
+        }
+        
+        if (pollType === "group" && participantsPerGroup < 2) {
+            newErrors.participantsPerGroup = "Groups must have at least 2 members";
+        }
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+    
     const create = () => {
+        if (!validateForm()) {
+            return;
+        }
+        
         const tx = new Transaction();
         
         // Convert datetime-local to Unix timestamp in milliseconds
@@ -146,39 +187,62 @@ export function CreatePoll({
             <CardContent>
                 <div className="space-y-6">
                     <div className="space-y-2">
-                        <Label htmlFor="name">Poll Name</Label>
+                        <Label htmlFor="name">Poll Name *</Label>
                         <Input 
                             id="name" 
                             value={name} 
-                            onChange={(e) => setName(e.target.value)} 
+                            onChange={(e) => {
+                                setName(e.target.value);
+                                if (errors.name) {
+                                    setErrors(prev => ({...prev, name: ''}));
+                                }
+                            }} 
                             placeholder="e.g., Best Innovation Project 2024" 
+                            required
+                            className={errors.name ? "border-red-500" : ""}
                         />
+                        {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
                     </div>
                     
                     <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
+                        <Label htmlFor="description">Description *</Label>
                         <Textarea 
                             id="description" 
                             value={description} 
-                            onChange={(e) => setDescription(e.target.value)} 
+                            onChange={(e) => {
+                                setDescription(e.target.value);
+                                if (errors.description) {
+                                    setErrors(prev => ({...prev, description: ''}));
+                                }
+                            }} 
                             placeholder="Describe what participants will be voting for..." 
+                            required
+                            className={errors.description ? "border-red-500" : ""}
                         />
+                        {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
                     </div>
                     
                     <div className="space-y-2">
-                        <Label htmlFor="deadline">Poll Deadline</Label>
+                        <Label htmlFor="deadline">Poll Deadline *</Label>
                         <input 
                             id="deadline" 
                             type="datetime-local" 
                             value={deadlineDate} 
-                            onChange={(e) => setDeadlineDate(e.target.value)}
+                            onChange={(e) => {
+                                setDeadlineDate(e.target.value);
+                                if (errors.deadline) {
+                                    setErrors(prev => ({...prev, deadline: ''}));
+                                }
+                            }}
                             min={new Date().toISOString().slice(0, 16)} // Prevent selecting past dates
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            required
+                            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.deadline ? 'border-red-500' : ''}`}
                             style={{
                                 colorScheme: 'dark',
                                 filter: 'invert(1)'
                             }}
                         />
+                        {errors.deadline && <p className="text-sm text-red-500">{errors.deadline}</p>}
                         <p className="text-xs text-gray-500">
                             Selected: {new Date(deadlineDate).toLocaleString()} 
                             ({new Date(deadlineDate).getTime()}ms)
@@ -188,7 +252,7 @@ export function CreatePoll({
                     {/* Poll Type Selection */}
                     <div className="space-y-4 border-t pt-4">
                         <div>
-                            <Label className="text-base font-semibold">Poll Type</Label>
+                            <Label className="text-base font-semibold">Poll Type *</Label>
                             <p className="text-sm text-gray-500 mb-3">Choose how participants will be organized</p>
                         </div>
                         
@@ -214,7 +278,7 @@ export function CreatePoll({
                                         onChange={() => {}}
                                         className="rounded"
                                     />
-                                    <Label htmlFor="individual" className="font-medium cursor-pointer">
+                                    <Label htmlFor="individual" className="font-medium cursor-pointer text-gray-600">
                                         🙋‍♂️ Individual Participants
                                     </Label>
                                 </div>
@@ -244,7 +308,7 @@ export function CreatePoll({
                                         onChange={() => {}}
                                         className="rounded"
                                     />
-                                    <Label htmlFor="group" className="font-medium cursor-pointer">
+                                    <Label htmlFor="group" className="font-medium cursor-pointer text-gray-600">
                                         👥 Team Groups
                                     </Label>
                                 </div>
@@ -257,8 +321,8 @@ export function CreatePoll({
                         {/* Configuration Options */}
                         <div className="space-y-4 bg-gray-50 rounded-lg p-4">
                             <div className="space-y-2">
-                                <Label htmlFor="maxGroups">
-                                    {pollType === "individual" ? "Maximum Participants" : "Maximum Groups"}
+                                <Label htmlFor="maxGroups" className="text-gray-600">
+                                    {pollType === "individual" ? "Maximum Participants *" : "Maximum Groups *"}
                                 </Label>
                                 <Input 
                                     id="maxGroups" 
@@ -266,23 +330,39 @@ export function CreatePoll({
                                     min="2" 
                                     max="50"
                                     value={maxGroups} 
-                                    onChange={(e) => setMaxGroups(parseInt(e.target.value) || 2)} 
+                                    onChange={(e) => {
+                                        setMaxGroups(parseInt(e.target.value) || 2);
+                                        if (errors.maxGroups) {
+                                            setErrors(prev => ({...prev, maxGroups: ''}));
+                                        }
+                                    }} 
                                     placeholder={pollType === "individual" ? "e.g., 20" : "e.g., 5"} 
+                                    required
+                                    className={errors.maxGroups ? "border-red-500" : ""}
                                 />
+                                {errors.maxGroups && <p className="text-sm text-red-500">{errors.maxGroups}</p>}
                             </div>
                             
                             {pollType === "group" && (
                                 <div className="space-y-2">
-                                    <Label htmlFor="participantsPerGroup">Members per Group</Label>
+                                    <Label htmlFor="participantsPerGroup" className="text-gray-600">Members per Group *</Label>
                                     <Input 
                                         id="participantsPerGroup" 
                                         type="number" 
                                         min="2" 
                                         max="10"
                                         value={participantsPerGroup} 
-                                        onChange={(e) => setParticipantsPerGroup(parseInt(e.target.value) || 2)} 
+                                        onChange={(e) => {
+                                            setParticipantsPerGroup(parseInt(e.target.value) || 2);
+                                            if (errors.participantsPerGroup) {
+                                                setErrors(prev => ({...prev, participantsPerGroup: ''}));
+                                            }
+                                        }} 
                                         placeholder="e.g., 3" 
+                                        required
+                                        className={errors.participantsPerGroup ? "border-red-500" : ""}
                                     />
+                                    {errors.participantsPerGroup && <p className="text-sm text-red-500">{errors.participantsPerGroup}</p>}
                                 </div>
                             )}
                             
